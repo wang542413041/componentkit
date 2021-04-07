@@ -10,7 +10,7 @@
 
 #import "CKInsetComponent.h"
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKMacros.h>
 #import <ComponentKit/CKComponentInternal.h>
 #import <ComponentKit/CKComponentPerfScope.h>
@@ -18,12 +18,16 @@
 #import <ComponentKit/CKSizeAssert.h>
 
 #import "CKComponentSubclass.h"
+#import "RCDimension_SwiftBridge+Internal.h"
 #import "ComponentLayoutContext.h"
 #import "CKComponentViewConfiguration_SwiftBridge+Internal.h"
 
 @interface CKInsetComponent ()
 {
-  UIEdgeInsets _insets;
+  RCRelativeDimension _top;
+  RCRelativeDimension _left;
+  RCRelativeDimension _bottom;
+  RCRelativeDimension _right;
   CKComponent *_component;
 }
 @end
@@ -49,7 +53,10 @@ static CGFloat centerInset(CGFloat outer, CGFloat inner)
 @implementation CKInsetComponent
 
 - (instancetype)initWithView:(const CKComponentViewConfiguration &)view
-                      insets:(UIEdgeInsets)insets
+                         top:(RCRelativeDimension)top
+                        left:(RCRelativeDimension)left
+                      bottom:(RCRelativeDimension)bottom
+                       right:(RCRelativeDimension)right
                    component:(CKComponent *)component
 {
   if (component == nil) {
@@ -58,45 +65,56 @@ static CGFloat centerInset(CGFloat outer, CGFloat inner)
   CKComponentPerfScope perfScope(self.class);
   CKInsetComponent *c = [super initWithView:view size:{}];
   if (c) {
-    c->_insets = insets;
+    c->_top = top;
+    c->_left = left;
+    c->_bottom = bottom;
+    c->_right = right;
     c->_component = component;
   }
   return c;
 }
 
-- (instancetype)initWithInsets:(UIEdgeInsets)insets
+- (instancetype)initWithTop:(RCRelativeDimension)top
+                       left:(RCRelativeDimension)left
+                     bottom:(RCRelativeDimension)bottom
+                      right:(RCRelativeDimension)right
                      component:(CKComponent *_Nullable)component
 {
-  return [self initWithView:{} insets:insets component:component];
+  return [self initWithView:{} top:top left:left bottom:bottom right:right component:component];
 }
 
 - (nullable instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *)swiftView
-                                   insets:(UIEdgeInsets)insets
-                                component:(CKComponent *_Nullable)component
+                                       top:(RCDimension_SwiftBridge *)top
+                                      left:(RCDimension_SwiftBridge *)left
+                                    bottom:(RCDimension_SwiftBridge *)bottom
+                                     right:(RCDimension_SwiftBridge *)right
+                                 component:(CKComponent *_Nullable)component
 {
   const auto view = swiftView != nil ? swiftView.viewConfig : CKComponentViewConfiguration{};
-  return [self initWithView:view insets:insets component:component];
+  return [self initWithView:view top:top.dimension left:left.dimension bottom:bottom.dimension right:right.dimension component:component];
 }
 
 /**
  Inset will compute a new constrained size for it's child after applying insets and re-positioning
  the child to respect the inset.
  */
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                          restrictedToSize:(const CKComponentSize &)size
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                          restrictedToSize:(const RCComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
-  CKAssert(size == CKComponentSize(),
+  RCAssert(size == RCComponentSize(),
            @"CKInsetComponent only passes size {} to the super class initializer, but received size %@ "
            "(component=%@)", size.description(), _component);
 
-  const CGFloat insetsX = (finiteOrZero(_insets.left) + finiteOrZero(_insets.right));
-  const CGFloat insetsY = (finiteOrZero(_insets.top) + finiteOrZero(_insets.bottom));
+  const UIEdgeInsets insets = UIEdgeInsetsMake(_top.resolve(0, parentSize.height), _left.resolve(0, parentSize.width), _bottom.resolve(0, parentSize.height), _right.resolve(0, parentSize.width));
+
+  const CGFloat insetsX = (finiteOrZero(insets.left) + finiteOrZero(insets.right));
+  const CGFloat insetsY = (finiteOrZero(insets.top) + finiteOrZero(insets.bottom));
 
   // if either x-axis inset is infinite, let child be intrinsic width
-  const CGFloat minWidth = (isinf(_insets.left) || isinf(_insets.right)) ? 0 : constrainedSize.min.width;
+  const CGFloat minWidth = (isinf(insets.left) || isinf(insets.right)) ? 0 : constrainedSize.min.width;
   // if either y-axis inset is infinite, let child be intrinsic height
-  const CGFloat minHeight = (isinf(_insets.top) || isinf(_insets.bottom)) ? 0 : constrainedSize.min.height;
+  const CGFloat minHeight = (isinf(insets.top) || isinf(insets.bottom)) ? 0 : constrainedSize.min.height;
 
   const CKSizeRange insetConstrainedSize = {
     {
@@ -113,25 +131,25 @@ static CGFloat centerInset(CGFloat outer, CGFloat inner)
     MAX(0, parentSize.width - insetsX),
     MAX(0, parentSize.height - insetsY)
   };
-  CKLayout childLayout = [_component layoutThatFits:insetConstrainedSize parentSize:insetParentSize];
+  RCLayout childLayout = [_component layoutThatFits:insetConstrainedSize parentSize:insetParentSize];
 
   const CGSize computedSize = constrainedSize.clamp({
-    finite(childLayout.size.width + _insets.left + _insets.right, parentSize.width),
-    finite(childLayout.size.height + _insets.top + _insets.bottom, parentSize.height),
+    finite(childLayout.size.width + insets.left + insets.right, parentSize.width),
+    finite(childLayout.size.height + insets.top + insets.bottom, parentSize.height),
   });
 
-  CKAssert(!isnan(computedSize.width) && !isnan(computedSize.height),
+  RCAssert(!isnan(computedSize.width) && !isnan(computedSize.height),
            @"Inset component computed size is NaN; you may not specify infinite insets against a NaN parent size\n"
-           "parentSize = %@, insets = %@\n%@", NSStringFromCGSize(parentSize), NSStringFromUIEdgeInsets(_insets),
+           "parentSize = %@, insets = %@\n%@", NSStringFromCGSize(parentSize), NSStringFromUIEdgeInsets(insets),
            CK::Component::LayoutContext::currentStackDescription());
 
-  const CGFloat x = finite(_insets.left, constrainedSize.max.width -
-                           (finite(_insets.right,
+  const CGFloat x = finite(insets.left, constrainedSize.max.width -
+                           (finite(insets.right,
                                    centerInset(constrainedSize.max.width, childLayout.size.width)) + childLayout.size.width));
 
-  const CGFloat y = finite(_insets.top,
+  const CGFloat y = finite(insets.top,
                            constrainedSize.max.height -
-                           (finite(_insets.bottom,
+                           (finite(insets.bottom,
                                    centerInset(constrainedSize.max.height, childLayout.size.height)) + childLayout.size.height));
   return {self, computedSize, {{{x,y}, std::move(childLayout)}}};
 }
@@ -140,12 +158,12 @@ static CGFloat centerInset(CGFloat outer, CGFloat inner)
 
 - (unsigned int)numberOfChildren
 {
-  return CKIterable::numberOfChildren(_component);
+  return RCIterable::numberOfChildren(_component);
 }
 
 - (id<CKMountable>)childAtIndex:(unsigned int)index
 {
-  return CKIterable::childAtIndex(self, index, _component);
+  return RCIterable::childAtIndex(self, index, _component);
 }
 
 @end

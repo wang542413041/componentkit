@@ -10,7 +10,7 @@
 
 #import "CKAccessibilityAggregation.h"
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKComponentContext.h>
 #import <ComponentKit/CKCompositeComponent.h>
 #import <RenderCore/CKInternalHelpers.h>
@@ -61,7 +61,7 @@
 
 + (instancetype)newWithComponent:(CKComponent *)component aggregatedAttributes:(CKAccessibilityAggregatedAttributes)attributes
 {
-  CKAssertWithCategory(attributes != CKAccessibilityAggregatedAttributeNone,
+  RCAssertWithCategory(attributes != CKAccessibilityAggregatedAttributeNone,
                        [component className],
                        @"A CKAccessibilityAggregatorComponent should not be allocated without at least one aggregated accessibility attribute");
   const auto c = [super newWithComponent:component];
@@ -74,7 +74,7 @@
 }
 
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                      layout:(const CKLayout &)layout
+                                      layout:(const RCLayout &)layout
                               supercomponent:(CKComponent *)supercomponent
 {
   if (CK::Component::Accessibility::IsAccessibilityEnabled()) {
@@ -128,7 +128,7 @@
   if ([actions count] == 1) {
     return [(NSObject *)[actions pointerAtIndex:0] accessibilityActivate];
   } else {
-    CKAssert(actions.count == 0, @"Multiple actions not supported, yet");
+    RCAssert(actions.count == 0, @"Multiple actions not supported, yet");
     return NO;
   }
 
@@ -141,16 +141,16 @@ static CKAccessibilityAggregationCache *populateAccessibilityAttributesCache(CKA
   // The context pushed here will be read by the CKComponent class in order to determine what are the accessibilityElements,
   // given that the logic is different based on the fact that a component is a descendant of an aggregating component or not
   const CKComponentContext<CKAccessibilityAggregationContext> aggregationContext([CKAccessibilityAggregationContext new]);
-  
+
   std::stack<NSObject *> stack;
-  
+
   // Let's take advantage of nil messaging
   NSMutableString *const aggregatedLabel = ((accessibilityAttributes & CKAccessibilityAggregatedAttributeLabel) > 0) ? [NSMutableString new] : nil;
   NSMutableString *const aggregatedValue = ((accessibilityAttributes & CKAccessibilityAggregatedAttributeValue) > 0) ? [NSMutableString new] : nil;
   NSMutableString *const aggregatedHint = ((accessibilityAttributes & CKAccessibilityAggregatedAttributeHint) > 0) ? [NSMutableString new] : nil;
   NSPointerArray *const aggregatedActions = ((accessibilityAttributes & CKAccessibilityAggregatedAttributeActions) > 0) ? [NSPointerArray weakObjectsPointerArray] : nil;
   UIAccessibilityTraits aggregatedTraits = UIAccessibilityTraitNone;
-  
+
   NSObject *current = initialObj;
   do {
     if (current != initialObj) {
@@ -200,7 +200,7 @@ static CKAccessibilityAggregationCache *populateAccessibilityAttributesCache(CKA
         stack.push(o);
       }
     }
-    
+
     if (!stack.empty()) {
       current = stack.top();
       stack.pop();
@@ -208,7 +208,7 @@ static CKAccessibilityAggregationCache *populateAccessibilityAttributesCache(CKA
       current = nil;
     }
   } while (current);
-  
+
   return [[CKAccessibilityAggregationCache alloc]
           initWithLabel:aggregatedLabel
           hint:aggregatedHint

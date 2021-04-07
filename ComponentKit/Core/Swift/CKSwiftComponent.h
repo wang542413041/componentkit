@@ -9,10 +9,11 @@
  */
 
 #import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKTreeNode.h>
 #import <ComponentKit/CKComponentScopeHandle.h>
 #import <ComponentKit/CKComponentController.h>
 #import <ComponentKit/CKComponentViewConfiguration_SwiftBridge.h>
-#import <ComponentKit/CKComponentSize_SwiftBridge.h>
+#import <ComponentKit/RCComponentSize_SwiftBridge.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -43,7 +44,7 @@ CK_INIT_UNAVAILABLE;
 CK_COMPONENT_INIT_UNAVAILABLE
 
 - (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *_Nullable)viewConfig
-                        swiftSize:(CKComponentSize_SwiftBridge *_Nullable)swiftSize
+                        swiftSize:(RCComponentSize_SwiftBridge *_Nullable)swiftSize
                             child:(CKComponent *_Nullable)child
                             model:(CKSwiftComponentModel_SwiftBridge *_Nullable)model NS_DESIGNATED_INITIALIZER;
 
@@ -54,27 +55,32 @@ CK_COMPONENT_INIT_UNAVAILABLE
 
 CK_EXTERN_C_BEGIN
 
-/// Clears the current node from the TLS. To be called only if `CKSwiftCreateScopeHandle` was called.
+/// Clears the current node from the TLS. To be called only if `CKSwiftCreateNode` was called.
 void CKSwiftPopClass(void);
 
 /// Creates a scope handle associated with the class / identifier.
-CKComponentScopeHandle *CKSwiftCreateScopeHandle(Class klass, id _Nullable identifier);
+CKTreeNode *CKSwiftCreateNode(Class klass, id _Nullable identifier);
 
 /// Initialises the state for a Swift Component.
-/// @param handle The handle associated with the component previously returned from `CKSwiftCreateScopeHandle`.
+/// @param node The node associated with the component previously returned from `CKSwiftCreateNode`.
 /// @param index The index of the current state.
-void CKSwiftInitializeState(CKComponentScopeHandle *handle, NSInteger index, NS_NOESCAPE id _Nullable (^initialValueProvider)(void));
+/// @return `YES` during first initialization.
+BOOL CKSwiftInitializeState(CKTreeNode *node, NSInteger index, NS_NOESCAPE id _Nullable (^initialValueProvider)(void));
 
 /// Fetches the current state value. Must be called on the main thread (or from `-body`).
-/// @param scopeHandle The handle associated with the component.
+/// @param node The node associated with the component.
 /// @param index The index of the current state.
-id _Nullable CKSwiftFetchState(CKComponentScopeHandle *scopeHandle, NSInteger index);
+id _Nullable CKSwiftFetchState(CKTreeNode *node, NSInteger index);
 
 /// Updates the state for a Swift Component.
-/// @param scopeHandle The handle associated with the component.
+/// @param node The node associated with the component.
 /// @param index The index of the current state.
 /// @param newValue The new state value.
-void CKSwiftUpdateState(CKComponentScopeHandle *scopeHandle, NSInteger index, id _Nullable newValue);
+void CKSwiftUpdateState(CKTreeNode *node, NSInteger index, id _Nullable newValue);
+
+/// Triggers a state update for a Swift Component.
+/// @param scopeHandle The handle associated with the component.
+void CKSwiftUpdateViewModelState(CKComponentScopeHandle *scopeHandle);
 
 /// Initialises an action.
 /// @param klass The class of the component. Used for runtime assertions.

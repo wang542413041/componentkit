@@ -16,11 +16,11 @@
 
 #endif
 
-#import <ComponentKit/CKContainerWrapper.h>
+#import <ComponentKit/RCContainerWrapper.h>
 #import <ComponentKit/CKLayoutComponent.h>
 #import <ComponentKit/CKMacros.h>
 #import <ComponentKit/CKOptional.h>
-#import <ComponentKit/CKComponentSize_SwiftBridge.h>
+#import <ComponentKit/RCComponentSize_SwiftBridge.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -134,17 +134,17 @@ typedef NS_CLOSED_ENUM(NSInteger, CKFlexboxPositionType) {
 struct CKFlexboxPosition {
   CKFlexboxPositionType type;
   /** Defines offset from starting edge of parent to starting edge of child */
-  CKRelativeDimension start;
+  RCRelativeDimension start;
   /** Defines offset from top edge of parent to top edge of child */
-  CKRelativeDimension top;
+  RCRelativeDimension top;
   /** Defines offset from end edge of parent to end edge of child */
-  CKRelativeDimension end;
+  RCRelativeDimension end;
   /** Defines offset from bottom edge of parent to bottom edge of child */
-  CKRelativeDimension bottom;
+  RCRelativeDimension bottom;
   /** Defines offset from left edge of parent to left edge of child */
-  CKRelativeDimension left;
+  RCRelativeDimension left;
   /** Defines offset from right edge of parent to right edge of child */
-  CKRelativeDimension right;
+  RCRelativeDimension right;
 };
 
 /** Allows us to differentiate between an explicitly set border and an undefined border */
@@ -181,15 +181,15 @@ struct CKFlexboxBorder {
 /** Allows us to differentiate between an explicitly set auto-dimension and an undefined dimension */
 class CKFlexboxDimension {
 public:
-  constexpr CKFlexboxDimension() noexcept : _relativeDimension(CKRelativeDimension()), _isDefined(false) {}
+  constexpr CKFlexboxDimension() noexcept : _relativeDimension(RCRelativeDimension()), _isDefined(false) {}
 
   /** Convenience initializer for points */
-  CKFlexboxDimension(CGFloat points) noexcept : CKFlexboxDimension(CKRelativeDimension(points), true) {}
+  CKFlexboxDimension(CGFloat points) noexcept : CKFlexboxDimension(RCRelativeDimension(points), true) {}
 
   /** Convenience initializer for a dimension object */
-  CKFlexboxDimension(CKRelativeDimension dimension) noexcept : CKFlexboxDimension(dimension, true) {}
+  CKFlexboxDimension(RCRelativeDimension dimension) noexcept : CKFlexboxDimension(dimension, true) {}
 
-  CKRelativeDimension dimension() const noexcept {
+  RCRelativeDimension dimension() const noexcept {
     return _relativeDimension;
   }
 
@@ -198,9 +198,9 @@ public:
   }
 
 private:
-  CKFlexboxDimension(CKRelativeDimension dimension, bool isDefined)
+  CKFlexboxDimension(RCRelativeDimension dimension, bool isDefined)
   : _relativeDimension(dimension), _isDefined(isDefined) {}
-  CKRelativeDimension _relativeDimension;
+  RCRelativeDimension _relativeDimension;
   // Make sizeof(_isDefined) == sizeof(void *) to get smaller code via SLP vectorization.
   NSUInteger _isDefined;
 };
@@ -303,7 +303,7 @@ struct CKFlexboxComponentChild {
    */
   CGFloat flexShrink{0.0};
   /** Specifies the initial size in the stack dimension for the child. */
-  CKRelativeDimension flexBasis;
+  RCRelativeDimension flexBasis;
   /** Orientation of the child along cross axis, overriding alignItems */
   CKFlexboxAlignSelf alignSelf;
   /** Position for the child */
@@ -322,7 +322,7 @@ struct CKFlexboxComponentChild {
    If constraint is Auto, will resolve against size of children Component
    By default all values are Auto
    **/
-  CKComponentSize sizeConstraints;
+  RCComponentSize sizeConstraints;
   /**
    This property allows node to force rounding only up.
    Text should never be rounded down as this may cause it to be truncated.
@@ -345,7 +345,7 @@ struct CKFlexboxComponentChild {
 
 extern template class std::vector<CKFlexboxComponentChild>;
 
-/** Keys used to access properties on the CKLayout extra dictionary. */
+/** Keys used to access properties on the RCLayout extra dictionary. */
 extern const struct CKStackComponentLayoutExtraKeys {
   /// NSNumber containing a BOOL which specifies whether a violation of constraints has occurred during layout. The absence of this key indicates that no violation of constraints occurred.
   NSString * const hadOverflow;
@@ -363,10 +363,10 @@ CK_INIT_UNAVAILABLE;
                      spacingAfter:(CGFloat)spacingAfter
                          flexGrow:(CGFloat)flexGrow
                        flexShrink:(CGFloat)flexShrink
-                   swiftFlexBasis:(CKDimension_SwiftBridge *_Nullable)swiftFlexBasis
+                   swiftFlexBasis:(RCDimension_SwiftBridge *_Nullable)swiftFlexBasis
                         alignSelf:(CKFlexboxAlignSelf)alignSelf
                            zIndex:(NSInteger)zIndex
-                  sizeConstraints:(CKComponentSize_SwiftBridge *_Nullable)sizeConstraints
+                  sizeConstraints:(RCComponentSize_SwiftBridge *_Nullable)sizeConstraints
                   useTextRounding:(BOOL)useTextRounding
               useHeightAsBaseline:(BOOL)useHeightAsBaseline NS_DESIGNATED_INITIALIZER NS_REFINED_FOR_SWIFT;
 
@@ -416,20 +416,20 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
  @param children A vector of children components.
  */
 + (instancetype)newWithView:(const CKComponentViewConfiguration &)view
-                       size:(const CKComponentSize &)size
+                       size:(const RCComponentSize &)size
                       style:(const CKFlexboxComponentStyle &)style
-                   children:(CKContainerWrapper<std::vector<CKFlexboxComponentChild>> &&)children;
+                   children:(RCContainerWrapper<std::vector<CKFlexboxComponentChild>> &&)children;
 
 - (instancetype)initWithView:(const CKComponentViewConfiguration &)view
-                        size:(const CKComponentSize &)size
+                        size:(const RCComponentSize &)size
                        style:(const CKFlexboxComponentStyle &)style
-                    children:(CKContainerWrapper<std::vector<CKFlexboxComponentChild>> &&)children NS_DESIGNATED_INITIALIZER;
+                    children:(std::vector<CKFlexboxComponentChild>)children NS_DESIGNATED_INITIALIZER;
 
 #else
 
 - (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *_Nullable)swiftView
                        swiftStyle:(CKFlexboxComponentStyle_SwiftBridge *_Nullable)swiftStyle
-                        swiftSize:(CKComponentSize_SwiftBridge *_Nullable)swiftSize
+                        swiftSize:(RCComponentSize_SwiftBridge *_Nullable)swiftSize
                     swiftChildren:(NSArray<CKFlexboxChild_SwiftBridge *> *)swiftChildren NS_REFINED_FOR_SWIFT NS_DESIGNATED_INITIALIZER;
 
 #endif

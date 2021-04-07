@@ -36,11 +36,11 @@ YGConfigRef _Nonnull ckYogaDefaultConfig();
 - (BOOL)isYogaBasedLayout;
 
 /**
- CKComponentSize of yoga node of the component. For CKComponent it is just it's size
+ RCComponentSize of yoga node of the component. For CKComponent it is just it's size
  that is passed in the constructor. For wrapper components, like CKCompositeComponent
  it's the node size of it's child component
  */
-- (CKComponentSize)nodeSize;
+- (RCComponentSize)nodeSize;
 
 /**
  A method that returns a new yoga node for a constained size.
@@ -54,7 +54,7 @@ YGConfigRef _Nonnull ckYogaDefaultConfig();
 
  By default returns an empty layout
  */
-- (CKLayout)layoutFromYgNode:(YGNodeRef _Nonnull)layoutNode thatFits:(CKSizeRange)constrainedSize;
+- (RCLayout)layoutFromYgNode:(YGNodeRef _Nonnull)layoutNode thatFits:(CKSizeRange)constrainedSize;
 
 /**
  A flag that represents whether the component's layout sets a custom baseline value using the key

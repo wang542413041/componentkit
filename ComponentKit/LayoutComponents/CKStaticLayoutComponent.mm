@@ -25,8 +25,8 @@
 }
 
 + (instancetype)newWithView:(const CKComponentViewConfiguration &)view
-                       size:(const CKComponentSize &)size
-                   children:(CKContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children
+                       size:(const RCComponentSize &)size
+                   children:(RCContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children
 {
   CKStaticLayoutComponent *c = [super newWithView:view size:size];
   if (c) {
@@ -35,7 +35,7 @@
   return c;
 }
 
-+ (instancetype)newWithChildren:(CKContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children
++ (instancetype)newWithChildren:(RCContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children
 {
   return [self newWithView:{} size:{} children:std::move(children)];
 }
@@ -50,11 +50,11 @@
   if (index < _children.size()) {
     return _children[index].component;
   }
-  CKFailAssertWithCategory(self.className, @"Index %u is out of bounds %u", index, [self numberOfChildren]);
+  RCFailAssertWithCategory(self.className, @"Index %u is out of bounds %u", index, [self numberOfChildren]);
   return nil;
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   CGSize size = {
     isinf(constrainedSize.max.width) ? kCKComponentParentDimensionUndefined : constrainedSize.max.width,
@@ -69,7 +69,7 @@
     };
     CKSizeRange childConstraint = child.size.resolveSizeRange(size, {{0,0}, autoMaxSize});
     CKAssertSizeRange(childConstraint);
-    return CKLayoutChild({child.position, CKComputeComponentLayout(child.component, childConstraint, size)});
+    return RCLayoutChild({child.position, CKComputeComponentLayout(child.component, childConstraint, size)});
   });
 
   if (isnan(size.width)) {

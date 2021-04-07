@@ -108,15 +108,15 @@ inComponentTreeWithRootComponent:(id<CKMountable>)component
 - (id<CKSystraceListener>)systraceListener { return nil; }
 - (BOOL)shouldCollectTreeNodeCreationInformation:(CKComponentScopeRoot *)scopeRoot { return NO; }
 
-- (void)didBuildTreeNodeForPrecomputedChild:(id<CKTreeNodeComponentProtocol>)component
-                                       node:(id<CKTreeNodeProtocol>)node
-                                     parent:(id<CKTreeNodeWithChildrenProtocol>)parent
+- (void)didBuildTreeNodeForPrecomputedChild:(id<CKComponentProtocol>)component
+                                       node:(CKTreeNode *)node
+                                     parent:(CKTreeNode *)parent
                                      params:(const CKBuildComponentTreeParams &)params
                        parentHasStateUpdate:(BOOL)parentHasStateUpdate {}
 
 - (BOOL)shouldCollectMountInformationForRootComponent:(CKComponent *)component { return YES; }
 
-- (void)didReuseNode:(id<CKTreeNodeProtocol>)node inScopeRoot:(CKComponentScopeRoot *)scopeRoot fromPreviousScopeRoot:(CKComponentScopeRoot *)previousScopeRoot {}
+- (void)didReuseNode:(CKTreeNode *)node inScopeRoot:(CKComponentScopeRoot *)scopeRoot fromPreviousScopeRoot:(CKComponentScopeRoot *)previousScopeRoot {}
 
 - (void)didReceiveStateUpdateFromScopeHandle:(CKComponentScopeHandle *)handle rootIdentifier:(CKComponentScopeRootIdentifier)rootID {
   dispatch_sync(_propertyAccessQueue, ^{

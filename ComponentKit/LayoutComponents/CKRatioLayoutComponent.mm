@@ -12,13 +12,13 @@
 
 #import <algorithm>
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKComponentSubclass.h>
 #import <ComponentKit/CKComponentPerfScope.h>
 #import <ComponentKit/CKInternalHelpers.h>
 #import <ComponentKit/CKSizeAssert.h>
 
-#import "CKComponentSize_SwiftBridge+Internal.h"
+#import "RCComponentSize_SwiftBridge+Internal.h"
 
 @implementation CKRatioLayoutComponent
 {
@@ -27,20 +27,20 @@
 }
 
 - (instancetype)initWithRatio:(CGFloat)ratio
-                    swiftSize:(CKComponentSize_SwiftBridge *)swiftSize
+                    swiftSize:(RCComponentSize_SwiftBridge *)swiftSize
                     component:(CKComponent *)component
 {
   const auto finalRatio = ratio <= 0 ? 1 : ratio;
-  const auto size = swiftSize != nil ? swiftSize.componentSize : CKComponentSize{};
+  const auto size = swiftSize != nil ? swiftSize.componentSize : RCComponentSize{};
   return [self initWithRatio:finalRatio size:size component:component];
 }
 
 - (instancetype)initWithRatio:(CGFloat)ratio
-                         size:(const CKComponentSize &)size
+                         size:(const RCComponentSize &)size
                     component:(CKComponent *)component
 
 {
-  CKAssert(ratio > 0, @"Ratio should be strictly positive, but received %f", ratio);
+  RCAssert(ratio > 0, @"Ratio should be strictly positive, but received %f", ratio);
   if (ratio <= 0 || component == nil) {
     return nil;
   }
@@ -54,13 +54,13 @@
 }
 
 + (instancetype)newWithRatio:(CGFloat)ratio
-                        size:(const CKComponentSize &)size
+                        size:(const RCComponentSize &)size
                    component:(CKComponent *_Nullable)component
 {
   return [[self alloc] initWithRatio:ratio size:size component:component];
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   std::vector<CGSize> sizeOptions;
   if (!isinf(constrainedSize.max.width)) {
@@ -86,7 +86,7 @@
   ? constrainedSize : constrainedSize.intersect(CKSizeRange(*bestSize, *bestSize));
   CKAssertSizeRange(childRange);
   const CGSize parentSize = (bestSize == sizeOptions.end()) ? kCKComponentParentSizeUndefined : *bestSize;
-  const CKLayout childLayout = CKComputeComponentLayout(_component, childRange, parentSize);
+  const RCLayout childLayout = CKComputeComponentLayout(_component, childRange, parentSize);
   return {self, childLayout.size, {{{0,0}, childLayout}}};
 }
 
@@ -94,12 +94,12 @@
 
 - (unsigned int)numberOfChildren
 {
-  return CKIterable::numberOfChildren(_component);
+  return RCIterable::numberOfChildren(_component);
 }
 
 - (id<CKMountable>)childAtIndex:(unsigned int)index
 {
-  return CKIterable::childAtIndex(self, index, _component);
+  return RCIterable::childAtIndex(self, index, _component);
 }
 
 @end

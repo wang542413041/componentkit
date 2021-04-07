@@ -11,15 +11,13 @@
 import Foundation
 import ComponentKit
 
-#if swift(>=5.3)
-
 typealias ViewLayoutCenteringOptions = CenterLayoutComponent.CenteringOptions
 typealias ViewLayoutCenteringSizingOptions = CenterLayoutComponent.SizingOptions
 
 public struct ViewLayoutModifier<Inflatable: ComponentInflatable> : ComponentInflatable {
   enum Directive {
     case frame(ComponentSize)
-    case padding(UIEdgeInsets)
+    case padding(top: Dimension, left: Dimension, bottom: Dimension, right: Dimension)
     case ratio(CGFloat)
     case center(centeringOptions: ViewLayoutCenteringOptions, sizingOptions: ViewLayoutCenteringSizingOptions)
     case background(() -> Component)
@@ -29,8 +27,13 @@ public struct ViewLayoutModifier<Inflatable: ComponentInflatable> : ComponentInf
       switch self {
       case let .frame(size):
         return SizingComponent(swiftSize: size.componentSize, component: content)
-      case let .padding(insets):
-        return InsetComponent(swiftView: nil, insets: insets, component: content)
+      case let .padding(top, left, bottom, right):
+        return InsetComponent(swiftView: nil,
+                              top: top.dimension,
+                              left: left.dimension,
+                              bottom: bottom.dimension,
+                              right: right.dimension,
+                              component: content)
       case let .ratio(ratio):
         return RatioLayoutComponent(ratio: ratio, swiftSize: nil, component: content)
       case let .center(centeringOptions, sizingOptions):
@@ -70,12 +73,12 @@ extension ComponentInflatable {
       inflatable: self,
       directive: .frame(
         ComponentSize(
-          width: width.map(Dimension.init(points:)),
-          height: height.map(Dimension.init(points:)),
-          minWidth: minWidth.map(Dimension.init(points:)),
-          minHeight: minHeight.map(Dimension.init(points:)),
-          maxWidth: maxWidth.map(Dimension.init(points:)),
-          maxHeight: maxHeight.map(Dimension.init(points:)))
+          width: width.map { .points($0) },
+          height: height.map { .points($0) },
+          minWidth: minWidth.map { .points($0) },
+          minHeight: minHeight.map { .points($0) },
+          maxWidth: maxWidth.map { .points($0) },
+          maxHeight: maxHeight.map { .points($0) })
       )
     )
   }
@@ -90,12 +93,12 @@ extension ComponentInflatable {
       inflatable: self,
       directive: .frame(
         ComponentSize(
-          width: width.map(Dimension.init(percent:)),
-          height: height.map(Dimension.init(percent:)),
-          minWidth: minWidth.map(Dimension.init(percent:)),
-          minHeight: minHeight.map(Dimension.init(percent:)),
-          maxWidth: maxWidth.map(Dimension.init(percent:)),
-          maxHeight: maxHeight.map(Dimension.init(percent:)))
+          width: width.map { .percent($0) },
+          height: height.map { .percent($0) },
+          minWidth: minWidth.map { .percent($0) },
+          minHeight: minHeight.map { .percent($0) },
+          maxWidth: maxWidth.map { .percent($0) },
+          maxHeight: maxHeight.map { .percent($0) })
       )
     )
   }
@@ -118,28 +121,45 @@ extension ComponentInflatable {
     ViewLayoutModifier(inflatable: self, directive: .ratio(ratio))
   }
 
-  public func padding(top: CGFloat? = nil,
-                      left: CGFloat? = nil,
-                      bottom: CGFloat? = nil,
-                      right: CGFloat? = nil) -> ViewLayoutModifier<Self> {
-    // TODO: nil should represent `default` and be contextual instead of `0`
+  public func padding(top: CGFloat = 0,
+                      left: CGFloat = 0,
+                      bottom: CGFloat = 0,
+                      right: CGFloat = 0) -> ViewLayoutModifier<Self> {
     ViewLayoutModifier(
       inflatable: self,
       directive: .padding(
-        UIEdgeInsets(
-          top: top ?? 0,
-          left: left ?? 0,
-          bottom: bottom ?? 0,
-          right: right ?? 0)
+        top: .points(top),
+        left: .points(left),
+        bottom: .points(bottom),
+        right: .points(right)
       )
     )
   }
 
-  // TODO: Padding with Edge set API
+  public func padding(_ insets: UIEdgeInsets) -> ViewLayoutModifier<Self> {
+    padding(top: insets.top, left: insets.left, bottom: insets.bottom, right: insets.right)
+  }
 
-  public func padding(_ length: CGFloat?) -> ViewLayoutModifier<Self> {
+  public func padding(_ length: CGFloat = 0) -> ViewLayoutModifier<Self> {
     padding(top: length, left: length, bottom: length, right: length)
   }
-}
 
-#endif
+  public func relativePadding(top: CGFloat = 0,
+                              left: CGFloat = 0,
+                              bottom: CGFloat = 0,
+                              right: CGFloat = 0) -> ViewLayoutModifier<Self> {
+    ViewLayoutModifier(
+      inflatable: self,
+      directive: .padding(
+        top: .percent(top),
+        left: .percent(left),
+        bottom: .percent(bottom),
+        right: .percent(right)
+      )
+    )
+  }
+
+  public func relativePadding(_ length: CGFloat = 0) -> ViewLayoutModifier<Self> {
+    relativePadding(top: length, left: length, bottom: length, right: length)
+  }
+}

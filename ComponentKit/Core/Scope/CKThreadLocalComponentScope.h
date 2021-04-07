@@ -17,14 +17,13 @@
 
 #import <Foundation/Foundation.h>
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKBuildComponent.h>
-#import <ComponentKit/CKComponentScopeHandle.h>
 #import <ComponentKit/CKGlobalConfig.h>
 #import <ComponentKit/CKNonNull.h>
-#import <ComponentKit/CKTreeNodeProtocol.h>
-#import <ComponentKit/CKScopeTreeNode.h>
-#import <ComponentKit/CKComponentCoalescingMode.h>
+#import <ComponentKit/CKTreeNode.h>
+#import <ComponentKit/CKTreeNode.h>
+#import <ComponentKit/RCComponentCoalescingMode.h>
 
 @protocol CKSystraceListener;
 
@@ -35,7 +34,7 @@ public:
                               CKBuildTrigger trigger = CKBuildTriggerNone,
                               BOOL shouldCollectTreeNodeCreationInformation = NO,
                               BOOL alwaysBuildRenderTree = NO,
-                              CKComponentCoalescingMode coalescingMode = CKComponentCoalescingModeNone,
+                              RCComponentCoalescingMode coalescingMode = RCComponentCoalescingModeNone,
                               BOOL enforceCKComponentSubclasses = YES,
                               BOOL disableRenderToNilInCoalescedCompositeComponents = NO);
   ~CKThreadLocalComponentScope();
@@ -47,7 +46,7 @@ public:
    Marks the current component scope as containing a component tree.
    This is used to ensure that during build component time we are initiating a component tree generation by calling `buildComponentTree:` on the root component.
    */
-  static void markCurrentScopeWithRenderComponentInTree();
+  static void markCurrentScopeWithRenderComponentInTree() noexcept;
 
   CK::NonNull<CKComponentScopeRoot *> const newScopeRoot;
   CKComponentScopeRoot *const previousScopeRoot;
@@ -69,15 +68,15 @@ public:
 
   const BOOL shouldCollectTreeNodeCreationInformation;
 
-  const CKComponentCoalescingMode coalescingMode;
+  const RCComponentCoalescingMode coalescingMode;
 
   const BOOL disableRenderToNilInCoalescedCompositeComponents;
 
   const BOOL enforceCKComponentSubclasses;
 
-  void push(CKComponentScopePair scopePair, BOOL keysSupportEnabled = NO);
-  void push(CKComponentScopePair scopePair, BOOL keysSupportEnabled, BOOL ancestorHasStateUpdate);
-  void pop(BOOL keysSupportEnabled = NO, BOOL ancestorStateUpdateSupportEnabled = NO);
+  void push(CKComponentScopePair scopePair, BOOL keysSupportEnabled = NO) noexcept;
+  void push(CKComponentScopePair scopePair, BOOL keysSupportEnabled, BOOL ancestorHasStateUpdate) noexcept;
+  void pop(BOOL keysSupportEnabled = NO, BOOL ancestorStateUpdateSupportEnabled = NO) noexcept;
 
 private:
   CKThreadLocalComponentScope *const previousScope;

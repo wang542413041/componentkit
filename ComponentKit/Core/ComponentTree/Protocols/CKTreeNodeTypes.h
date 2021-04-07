@@ -11,8 +11,9 @@
 #import <Foundation/Foundation.h>
 #import <ComponentKit/CKDefines.h>
 
-#import <ComponentKit/CKEqualityHelpers.h>
+#import <ComponentKit/RCEqualityHelpers.h>
 #import <ComponentKit/ComponentUtilities.h>
+#import <ComponentKit/CKTreeNodeComponentKey.h>
 
 /** Unique identifier for tree nodes. */
 typedef int32_t CKTreeNodeIdentifier;
@@ -23,34 +24,7 @@ typedef int32_t CKTreeNodeIdentifier;
 #include <unordered_set>
 #include <unordered_map>
 
-/** A key between a tree ndoe to its parent */
-typedef std::tuple<const char*, NSUInteger, id<NSObject>, std::vector<id<NSObject>>> CKTreeNodeComponentKey;
 /** unordered_set of all the "dirty" tree nodes' identifiers; "dirty" means node on a state update branch. */
 typedef std::unordered_set<CKTreeNodeIdentifier> CKTreeNodeDirtyIds;
-
-namespace CK {
-  namespace TreeNode {
-    auto areKeysEqual(const CKTreeNodeComponentKey &lhs, const CKTreeNodeComponentKey &rhs) -> bool;
-    auto isKeyEmpty(const CKTreeNodeComponentKey &key) -> bool;
-
-    struct comparator {
-      bool operator() (const CKTreeNodeComponentKey &lhs, const CKTreeNodeComponentKey &rhs) const
-      {
-        return areKeysEqual(lhs, rhs);
-      }
-    };
-
-    struct hasher {
-      std::size_t operator() (const CKTreeNodeComponentKey &n) const
-      {
-        return std::hash<std::size_t>()((std::size_t)std::get<0>(n)) ^ std::get<1>(n) ^ [std::get<2>(n) hash] ^ std::get<3>(n).size();
-      }
-    };
-  }
-}
-
-/** A map between CKTreeNodeComponentKey to counter; we use it to avoid collisions for identical keys */
-using CKTreeNodeKeyToCounter = std::unordered_map<CKTreeNodeComponentKey, NSUInteger, CK::TreeNode::hasher, CK::TreeNode::comparator>;
-
 
 #endif

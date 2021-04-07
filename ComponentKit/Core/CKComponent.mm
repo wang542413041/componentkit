@@ -14,22 +14,23 @@
 #import "CKComponentSubclass.h"
 
 #import <ComponentKit/CKAnalyticsListener.h>
-#import <ComponentKit/CKAssert.h>
-#import <ComponentKit/CKArgumentPrecondition.h>
+#import <RenderCore/RCAssert.h>
+#import <ComponentKit/RCArgumentPrecondition.h>
 #import <ComponentKit/CKBuildComponent.h>
 #import <ComponentKit/CKComponentScopeEnumeratorProvider.h>
 #import <ComponentKit/CKComponentContextHelper.h>
 #import <ComponentKit/CKFatal.h>
 #import <ComponentKit/CKInternalHelpers.h>
 #import <ComponentKit/CKMacros.h>
-#import <ComponentKit/CKTreeNodeProtocol.h>
+#import <ComponentKit/CKTreeNode.h>
 #import <ComponentKit/CKInternalHelpers.h>
 #import <ComponentKit/CKWeakObjectContainer.h>
-#import <ComponentKit/CKComponentDescriptionHelper.h>
+#import <ComponentKit/RCComponentDescriptionHelper.h>
 #import <ComponentKit/CKMountableHelpers.h>
-#import <ComponentKit/CKComponentSize_SwiftBridge+Internal.h>
+#import <ComponentKit/RCComponentSize_SwiftBridge+Internal.h>
 #import <ComponentKit/CKComponentViewConfiguration_SwiftBridge+Internal.h>
 
+#import "CKComponent+LayoutLifecycle.h"
 #import "CKComponent+UIView.h"
 #import "CKComponentAccessibility.h"
 #import "CKAccessibilityAggregation.h"
@@ -52,7 +53,7 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 
 @implementation CKComponent
 {
-  id<CKTreeNodeProtocol> _treeNode;
+  CKTreeNode *_treeNode;
   CKComponentViewConfiguration _viewConfiguration;
 
   /** Only non-null while mounted. */
@@ -63,7 +64,7 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 + (void)initialize
 {
   if (self != [CKComponent class]) {
-    CKAssert(!CKSubclassOverridesInstanceMethod([CKComponent class], self, @selector(layoutThatFits:parentSize:)),
+    RCAssert(!CKSubclassOverridesInstanceMethod([CKComponent class], self, @selector(layoutThatFits:parentSize:)),
              @"%@ overrides -layoutThatFits:parentSize: which is not allowed. Override -computeLayoutThatFits: "
              "or -computeLayoutThatFits:restrictedToSize:relativeToParentSize: instead.",
              self);
@@ -71,7 +72,7 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 }
 #endif
 
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view size:(const CKComponentSize &)size
++ (instancetype)newWithView:(const CKComponentViewConfiguration &)view size:(const RCComponentSize &)size
 {
   return [[self alloc] initWithView:view size:size];
 }
@@ -82,15 +83,15 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 }
 
 - (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *)swiftView
-                        swiftSize:(CKComponentSize_SwiftBridge *)swiftSize
+                        swiftSize:(RCComponentSize_SwiftBridge *)swiftSize
 {
   const auto view = swiftView != nil ? swiftView.viewConfig : CKComponentViewConfiguration{};
-  const auto size = swiftSize != nil ? swiftSize.componentSize : CKComponentSize{};
+  const auto size = swiftSize != nil ? swiftSize.componentSize : RCComponentSize{};
   return [self initWithView:view size:size];
 }
 
 - (instancetype)initWithView:(const CKComponentViewConfiguration &)view
-                        size:(const CKComponentSize &)size
+                        size:(const RCComponentSize &)size
 {
   if (self = [super init]) {
     _viewConfiguration = view;
@@ -104,7 +105,7 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 - (void)dealloc
 {
   // Since the component and its view hold strong references to each other, this should never happen!
-  CKAssert(_mountInfo == nullptr, @"%@ must be unmounted before dealloc", self.className);
+  RCAssert(_mountInfo == nullptr, @"%@ must be unmounted before dealloc", self.className);
 }
 
 - (NSString *)description
@@ -162,35 +163,30 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 
 - (void)setViewConfiguration:(const CKComponentViewConfiguration &)viewConfiguration
 {
-  CKAssert(_viewConfiguration.isDefaultConfiguration(), @"Component(%@) already has '_viewConfiguration'.", self);
+  RCAssert(_viewConfiguration.isDefaultConfiguration(), @"Component(%@) already has '_viewConfiguration'.", self);
   _viewConfiguration = viewConfiguration;
-}
-
-- (CKComponentScopeHandle *)scopeHandle
-{
-  return _treeNode.scopeHandle;
 }
 
 - (CKComponentViewContext)viewContext
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   return _mountInfo ? _mountInfo->viewContext : CKComponentViewContext();
 }
 
-- (void)acquireTreeNode:(id<CKTreeNodeProtocol>)treeNode
+- (void)acquireTreeNode:(CKTreeNode *)treeNode
 {
   _treeNode = treeNode;
 }
 
-- (id<CKTreeNodeProtocol>)treeNode
+- (CKTreeNode *)treeNode
 {
   return _treeNode;
 }
 
 #pragma mark - ComponentTree
 
-- (void)buildComponentTree:(id<CKTreeNodeWithChildrenProtocol>)parent
-            previousParent:(id<CKTreeNodeWithChildrenProtocol> _Nullable)previousParent
+- (void)buildComponentTree:(CKTreeNode *)parent
+            previousParent:(CKTreeNode *_Nullable)previousParent
                     params:(const CKBuildComponentTreeParams &)params
       parentHasStateUpdate:(BOOL)parentHasStateUpdate
 {
@@ -200,10 +196,10 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 #pragma mark - Mounting and Unmounting
 
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                      layout:(const CKLayout &)layout
+                                      layout:(const RCLayout &)layout
                               supercomponent:(CKComponent *)supercomponent
 {
-  CKCAssertWithCategory([NSThread isMainThread], self.className, @"This method must be called on the main thread");
+  RCCAssertWithCategory([NSThread isMainThread], self.className, @"This method must be called on the main thread");
 
   // Taking a const ref to a temporary extends the lifetime of the temporary to the lifetime of the const ref
   const CKComponentViewConfiguration &viewConfiguration =
@@ -211,85 +207,43 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
     ? CK::Component::Accessibility::AccessibleViewConfiguration(_viewConfiguration)
     : _viewConfiguration;
 
-  if (_mountInfo == nullptr) {
-    _mountInfo.reset(new CKMountInfo());
-  }
-  _mountInfo->supercomponent = supercomponent;
-
   CKComponentController *controller = _treeNode.scopeHandle.controller;
   [controller componentWillMount:self];
 
   const CK::Component::MountContext &effectiveContext = [CKComponentDebugController debugMode]
   ? CKDebugMountContext([self class], context, _viewConfiguration, layout.size) : context;
 
-  UIView *v = effectiveContext.viewManager->viewForConfiguration([self class], viewConfiguration);
-  if (v) {
-    CKComponent *currentMountedComponent = CKMountedComponentForView(v);
-    CKMountAnimationGuard g(currentMountedComponent, self, context, _viewConfiguration);
-    if (_mountInfo->view != v) {
-      [self _relinquishMountedView];     // First release our old view
-      [currentMountedComponent unmount]; // Then unmount old component (if any) from the new view
-      CKSetMountedComponentForView(v, self);
-      CK::Component::AttributeApplicator::apply(v, viewConfiguration);
-      [controller component:self didAcquireView:v];
-      _mountInfo->view = v;
-    } else {
-      CKAssert(currentMountedComponent == self, @"");
-    }
+  return CKPerformMount(_mountInfo, layout, viewConfiguration, effectiveContext, supercomponent, &didAcquireView, &willRelinquishView, &blockAnimationIfNeeded, &unblockAnimation);
+}
 
-    @try {
-      CKSetViewPositionAndBounds(v, context, layout.size);
-    } @catch (NSException *exception) {
-      CKCFatalWithCategory(self.className,
-                           @"Raised %@ during mount: %@\nBacktrace: %@\nChildren: %@",
-                           exception.name,
-                           exception.reason,
-                           CKComponentBacktraceDescription(CKComponentGenerateBacktrace(supercomponent)),
-                           CKComponentChildrenDescription(layout.children));
-    }
+__attribute__((objc_externally_retained)) // parameters are retained by the caller
+static void didAcquireView(id<CKMountable> mountable, UIView *view)
+{
+  CKComponent *component = (CKComponent *)mountable;
+  CKComponentController *controller = component.treeNode.scopeHandle.controller;
+  [controller component:component didAcquireView:view];
+}
 
-    _mountInfo->viewContext = {v, {{0,0}, v.bounds.size}};
-
-    return {.mountChildren = YES, .contextForChildren = effectiveContext.childContextForSubview(v, g.didBlockAnimations)};
-  } else {
-    CKCAssertWithCategory(_mountInfo->view == nil, self.className,
-                          @"%@ should not have a mounted %@ after previously being mounted without a view.\n%@",
-                          self.className, [_mountInfo->view class], CKComponentBacktraceDescription(CKComponentGenerateBacktrace(self)));
-    _mountInfo->viewContext = {effectiveContext.viewManager->view, {effectiveContext.position, layout.size}};
-
-    return {.mountChildren = YES, .contextForChildren = effectiveContext};
-  }
+__attribute__((objc_externally_retained)) // parameters are retained by the caller
+static void willRelinquishView(id<CKMountable> mountable, UIView *view)
+{
+  CKComponent *component = (CKComponent *)mountable;
+  [(CKComponentController *)component.treeNode.scopeHandle.controller component:component willRelinquishView:view];
 }
 
 - (NSString *)backtraceStackDescription
 {
-  return CKComponentBacktraceStackDescription(CKComponentGenerateBacktrace(self));
+  return RCComponentBacktraceStackDescription(RCComponentGenerateBacktrace(self));
 }
 
 - (void)unmount
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   if (_mountInfo != nullptr) {
     CKComponentController *const controller = _treeNode.scopeHandle.controller;
     [controller componentWillUnmount:self];
-    [self _relinquishMountedView];
-    _mountInfo.reset();
+    CKPerformUnmount(_mountInfo, self, &willRelinquishView);
     [controller componentDidUnmount:self];
-  }
-}
-
-- (void)_relinquishMountedView
-{
-  CKAssertMainThread();
-  CKAssert(_mountInfo != nullptr, @"_mountInfo should not be null");
-  if (_mountInfo != nullptr) {
-    UIView *view = _mountInfo->view;
-    if (view) {
-      CKAssert(CKMountedComponentForView(view) == self, @"");
-      [(CKComponentController *)_treeNode.scopeHandle.controller component:self willRelinquishView:view];
-      CKSetMountedComponentForView(view, nil);
-      _mountInfo->view = nil;
-    }
   }
 }
 
@@ -322,15 +276,27 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 
 - (UIView *)viewForAnimation
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   return _mountInfo ? _mountInfo->view : nil;
+}
+
+__attribute__((objc_externally_retained)) // parameters are retained by the caller
+static BOOL blockAnimationIfNeeded(id<CKMountable> oldComponent, id<CKMountable> newComponent, const CK::Component::MountContext &ctx, const CKViewConfiguration &viewConfig)
+{
+  return CKMountAnimationGuard::blockAnimationsIfNeeded(oldComponent, newComponent, ctx, viewConfig);
+}
+
+__attribute__((objc_externally_retained)) // parameters are retained by the caller
+static void unblockAnimation()
+{
+  CKMountAnimationGuard::unblockAnimation();
 }
 
 #pragma mark - Layout
 
 #if CK_ASSERTIONS_ENABLED
 
-- (void)_validate_layoutThatFits:(const CKSizeRange &)constrainedSize layout:(const CKLayout &)layout parentSize:(const CGSize &)parentSize
+- (void)_validate_layoutThatFits:(const CKSizeRange &)constrainedSize layout:(const RCLayout &)layout parentSize:(const CGSize &)parentSize
 {
   // If this component has children in its layout, this means that it's not a real leaf component.
   // As a result, the infrastructure won't call `buildComponentTree:` on the component's children and can affect the render process.
@@ -338,7 +304,7 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
     const auto overridesIterableMethods =
     CKSubclassOverridesInstanceMethod([CKComponent class], self.class, @selector(childAtIndex:)) &&
     CKSubclassOverridesInstanceMethod([CKComponent class], self.class, @selector(numberOfChildren));
-    CKAssertWithCategory(overridesIterableMethods,
+    RCAssertWithCategory(overridesIterableMethods,
                          self.className,
                          @"%@ is subclassing CKComponent directly, you need to subclass CKLayoutComponent instead. "
                          "Context: we’re phasing out CKComponent subclasses for in favor of CKLayoutComponent subclasses. "
@@ -346,13 +312,13 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
                          self.className);
   }
 
-  CKAssert(layout.component == self, @"Layout computed by %@ should return self as component, but returned %@",
+  RCAssert(layout.component == self, @"Layout computed by %@ should return self as component, but returned %@",
            self.className, layout.component.className);
 
   CKAssertResolvedSize(_size, parentSize);
   CKSizeRange resolvedRange __attribute__((unused)) = constrainedSize.intersect(_size.resolve(parentSize));
   CKAssertSizeRange(resolvedRange);
-  CKAssertWithCategory(CKIsGreaterThanOrEqualWithTolerance(resolvedRange.max.width, layout.size.width)
+  RCAssertWithCategory(CKIsGreaterThanOrEqualWithTolerance(resolvedRange.max.width, layout.size.width)
                        && CKIsGreaterThanOrEqualWithTolerance(layout.size.width, resolvedRange.min.width)
                        && CKIsGreaterThanOrEqualWithTolerance(resolvedRange.max.height,layout.size.height)
                        && CKIsGreaterThanOrEqualWithTolerance(layout.size.height,resolvedRange.min.height),
@@ -364,32 +330,43 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 
 #endif
 
-- (CKLayout)layoutThatFits:(CKSizeRange)constrainedSize parentSize:(CGSize)parentSize
+__attribute__((objc_externally_retained)) // parameters are retained by the caller
+void CKComponentWillLayout(CKComponent *component, CKSizeRange constrainedSize, CGSize parentSize, id<CKSystraceListener> systraceListener)
+{
+  CKAssertSizeRange(constrainedSize);
+  [systraceListener willLayoutComponent:component];
+}
+
+- (RCLayout)layoutThatFits:(CKSizeRange)constrainedSize parentSize:(CGSize)parentSize
 {
 #if CK_ASSERTIONS_ENABLED
   const CKComponentContext<CKComponentCreationValidationContext> validationContext([[CKComponentCreationValidationContext alloc] initWithSource:CKComponentCreationValidationSourceLayout]);
 #endif
-
-  CKAssertSizeRange(constrainedSize);
+  
   CK::Component::LayoutContext context(self, constrainedSize);
   auto const systraceListener = context.systraceListener;
-  [systraceListener willLayoutComponent:self];
-
-  CKLayout layout = [self computeLayoutThatFits:constrainedSize
-                                        restrictedToSize:_size
-                                    relativeToParentSize:parentSize];
-
-#if CK_ASSERTIONS_ENABLED
-  [self _validate_layoutThatFits:constrainedSize layout:layout parentSize:parentSize];
-#endif
-
-  [systraceListener didLayoutComponent:self];
-
+  CKComponentWillLayout(self, constrainedSize, parentSize, systraceListener);
+  
+  RCLayout layout = [self computeLayoutThatFits:constrainedSize
+                               restrictedToSize:_size
+                           relativeToParentSize:parentSize];
+  
+  CKComponentDidLayout(self, layout, constrainedSize, parentSize, systraceListener);
+  
   return layout;
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                          restrictedToSize:(const CKComponentSize &)size
+__attribute__((objc_externally_retained)) // parameters are retained by the caller
+void CKComponentDidLayout(CKComponent *component, const RCLayout &layout, CKSizeRange constrainedSize, CGSize parentSize, id<CKSystraceListener> systraceListener)
+{
+#if CK_ASSERTIONS_ENABLED
+  [component _validate_layoutThatFits:constrainedSize layout:layout parentSize:parentSize];
+#endif
+  [systraceListener didLayoutComponent:component];
+}
+
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                          restrictedToSize:(const RCComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
   CKAssertResolvedSize(_size, parentSize);
@@ -397,7 +374,7 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
   return [self computeLayoutThatFits:resolvedRange];
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   return {self, constrainedSize.min};
 }
@@ -411,7 +388,7 @@ CGSize const kCKComponentParentSizeUndefined = {kCKComponentParentDimensionUndef
 
 - (id)nextResponderAfterController
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   if (_mountInfo && _mountInfo->supercomponent) {
     return _mountInfo->supercomponent;
   }
@@ -457,8 +434,8 @@ static void *kRootComponentMountedViewKey = &kRootComponentMountedViewKey;
 
 #pragma mark - CKComponentProtocol
 
-+ (CKComponentCoalescingMode)coalescingMode {
-  return CKComponentCoalescingModeNone;
++ (RCComponentCoalescingMode)coalescingMode {
+  return RCComponentCoalescingModeNone;
 }
 
 + (Class<CKComponentControllerProtocol>)controllerClass
@@ -469,7 +446,7 @@ static void *kRootComponentMountedViewKey = &kRootComponentMountedViewKey;
     return Nil; // Don't create root CKComponentControllers as it does nothing interesting.
   }
 
-  CKAssertWithCategory(!NSClassFromString([NSStringFromClass(componentClass) stringByAppendingString:@"Controller"]),
+  RCAssertWithCategory(!NSClassFromString([NSStringFromClass(componentClass) stringByAppendingString:@"Controller"]),
                        [self class], @"Should override + (Class<CKComponentControllerProtocol>)controllerClass to return its controllerClass");
   return Nil;
 }
@@ -483,8 +460,8 @@ static void *kRootComponentMountedViewKey = &kRootComponentMountedViewKey;
 
 - (void)updateState:(id (^)(id))updateBlock mode:(CKUpdateMode)mode
 {
-  CKAssertWithCategory(_treeNode.scopeHandle != nil, self.className, @"A component without state cannot update its state.");
-  CKAssertWithCategory(updateBlock != nil, self.className, @"Cannot enqueue component state modification with a nil update block.");
+  RCAssertWithCategory(_treeNode.scopeHandle != nil, self.className, @"A component without state cannot update its state.");
+  RCAssertWithCategory(updateBlock != nil, self.className, @"Cannot enqueue component state modification with a nil update block.");
   [_treeNode.scopeHandle updateState:updateBlock metadata:{} mode:mode];
 }
 
@@ -572,7 +549,7 @@ static void *kRootComponentMountedViewKey = &kRootComponentMountedViewKey;
 }
 
 - (void)setAccessibilityElements:(NSArray *)accessibilityElements {
-  CKFailAssert(@"Attempt to setAccessibilityElements in %@", NSStringFromClass([self class]));
+  RCFailAssert(@"Attempt to setAccessibilityElements in %@", NSStringFromClass([self class]));
 }
 
 // In base Component we rely on the view to provide the accessible elements:
@@ -582,7 +559,9 @@ static void *kRootComponentMountedViewKey = &kRootComponentMountedViewKey;
 - (NSArray<NSObject *> *)accessibilityElements
 {
   const auto mountedView = self.mountedView;
-  if ([[mountedView accessibilityElements] count] > 0 || [mountedView isAccessibilityElement]) {
+  if ([[mountedView accessibilityElements] count] > 0
+      || [mountedView accessibilityElementCount] > 0
+      || [mountedView isAccessibilityElement]) {
     if ([mountedView isAccessibilityElement]) {
       return @[self.mountedView];
     } else if (![mountedView isAccessibilityElement] && CKAccessibilityAggregationIsActive()) {

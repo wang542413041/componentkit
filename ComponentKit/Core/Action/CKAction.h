@@ -111,6 +111,9 @@ template<typename... T>
 class CKAction : public CKActionBase {
   /** This constructor is private to forbid direct usage. Use actionFromBlock. */
   CKAction<T...>(void(^block)(CKComponent *, T...)) noexcept : CKActionBase((dispatch_block_t)block) {};
+  
+  CKAction<T...>(void(^block)(CKComponent *, T...), void *functionPointer, CKScopedResponder *responder, CKScopedResponderKey key) noexcept
+  : CKActionBase((dispatch_block_t)block, functionPointer, responder, key) {};
 
 public:
   CKAction<T...>() noexcept : CKActionBase() {};
@@ -133,12 +136,12 @@ public:
   }
 
   // Changing the order of the params here, as otherwise it confuses this constructor with the target one.
-  CKAction<T...>(SEL selector, CKComponentScopeHandle *handle) noexcept : CKActionBase(selector, handle)
+  CKAction<T...>(SEL selector, CKTreeNode *node) noexcept : CKActionBase(selector, node)
   {
 #if DEBUG
     std::vector<const char *> typeEncodings;
     CKActionTypeVectorBuild(typeEncodings, CKActionTypelist<T...>{});
-    _CKTypedComponentDebugCheckComponentScopeHandle(handle, selector, typeEncodings);
+    _CKTypedComponentDebugCheckComponentNode(node, selector, typeEncodings);
 #endif
   }
 
@@ -157,14 +160,18 @@ public:
    Construct an action from a Render component.
    */
   static CKAction<T...> actionForRenderComponent(id<CKRenderComponentProtocol> component, SEL selector) {
-    return CKAction<T...>(selector, component.scopeHandle);
+    return CKAction<T...>(selector, component.treeNode);
   }
 
   /**
   Constructs an action for a controller from a render context.
   */
   static CKAction<T...> unsafeActionForController(const CK::BaseSpecContext &context, SEL selector) {
-    return CKAction<T...>{selector, scopeHandleFromContext(context)};
+    return CKAction<T...>{selector, nodeFromContext(context)};
+  }
+  
+  static CKAction<T...> unsafeActionWithIdentifier(void(^block)(CKComponent *, T...), void *functionPointer, CKScopedResponder *responder, CKScopedResponderKey key) {
+    return CKAction<T...>(block, functionPointer, responder, key);
   }
 
   /** Like actionFromBlock, but allows passing a block that doesn't take a sender component. */
@@ -200,7 +207,7 @@ public:
       action.send(sender, argsT...);
     });
   }
-  
+
   /**
    Combines two actions into one, the actions will be executed in the specified order.
    */
@@ -238,7 +245,7 @@ public:
    */
   template<typename... Ts>
   explicit CKAction<>(const CKAction<Ts...> &action) noexcept : CKActionBase(action) {
-    CKCAssert(_variant != CKActionVariant::Block, @"Block actions cannot take fewer arguments than provided in the declaration of the action, you are depending on undefined behavior and will cause crashes.");
+    RCCAssert(_variant != CKActionVariant::Block, @"Block actions cannot take fewer arguments than provided in the declaration of the action, you are depending on undefined behavior and will cause crashes.");
   };
 
   ~CKAction() {};
@@ -253,7 +260,7 @@ public:
 
   void send(CKComponent *sender, CKActionSendBehavior behavior, T... args) const
   {
-    if (_variant == CKActionVariant::Block) {
+    if (_variant == CKActionVariant::Block || _variant == CKActionVariant::BlockWithIdentifier) {
       void (^block)(CKComponent *sender, T... args) = (void (^)(CKComponent *sender, T... args))_block;
       block(sender, args...);
       return;

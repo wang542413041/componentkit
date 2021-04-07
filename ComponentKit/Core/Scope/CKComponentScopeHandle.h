@@ -26,11 +26,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol CKComponentStateListener;
 @protocol CKComponentProtocol;
-@protocol CKTreeNodeProtocol;
 
 @interface CKComponentScopeHandle : NSObject
 
 #if CK_NOT_SWIFT
+
+- (instancetype)init NS_UNAVAILABLE;
 
 /** Creates a conceptually brand new scope handle */
 - (instancetype)initWithListener:(id<CKComponentStateListener> _Nullable)listener
@@ -81,12 +82,19 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign, readonly) CKTreeNodeIdentifier treeNodeIdentifier;
 
 /** The tree node of the acquired component. Setter should only be called *before* resolution. */
-@property (nonatomic, weak, nullable) id<CKTreeNodeProtocol> treeNode;
+@property (nonatomic, weak, nullable) CKTreeNode *treeNode;
 
 /**
  Provides a responder corresponding with this scope handle. The controller will assert if called before resolution.
  */
 @property (nonatomic, strong, readonly) CKScopedResponder *scopedResponder;
+
+#else
+
+/**
+ A scope handle without state / controller. Merely enough to trigger a state update.
+ */
+- (instancetype)newStatelessHandle;
 
 #endif
 
@@ -114,15 +122,11 @@ struct std::equal_to<CKComponentScopeHandle *>
 
 #endif
 
-typedef int32_t CKScopedResponderUniqueIdentifier;
-
 NS_SWIFT_NAME(ScopedResponderKey)
 typedef int CKScopedResponderKey;
 
 NS_SWIFT_NAME(ScopedResponder)
 @interface CKScopedResponder : NSObject
-
-@property (nonatomic, readonly, assign) CKScopedResponderUniqueIdentifier uniqueIdentifier;
 
 /**
  Returns the key needed to access the responder at a later time.

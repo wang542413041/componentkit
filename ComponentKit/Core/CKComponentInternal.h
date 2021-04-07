@@ -19,11 +19,11 @@
 #import <ComponentKit/CKComponent.h>
 #import <ComponentKit/CKComponentLayout.h>
 #import <ComponentKit/CKComponentScopeEnumeratorProvider.h>
-#import <ComponentKit/CKTreeNodeProtocol.h>
+#import <ComponentKit/CKTreeNode.h>
 
 @protocol CKSystraceListener;
 
-@interface CKComponent () <CKTreeNodeComponentProtocol>
+@interface CKComponent () <CKComponentProtocol>
 
 /**
  Mounts the component in the given context:
@@ -45,12 +45,12 @@
  used to specify that subcomponents should be mounted inside the view.
  */
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                      layout:(const CKLayout &)layout
+                                      layout:(const RCLayout &)layout
                               supercomponent:(CKComponent *)supercomponent NS_REQUIRES_SUPER;
 
 /**
  This method can be used to override what accessible elements are provided by the component. Very similar to UIKit accessibilityElements.
- 
+
  Override this if your component wants needs to return a custom set of accessible children, but this should be very rare!
  */
 - (NSArray<NSObject *> *)accessibilityChildren;
@@ -76,7 +76,7 @@
 @property (nonatomic, weak) UIView *rootComponentMountedView;
 
 /** The size that was passed into the component; don't touch this. */
-@property (nonatomic, assign, readonly) CKComponentSize size;
+@property (nonatomic, assign, readonly) RCComponentSize size;
 
 /** Used to get the scope root enumerator; during component creation only */
 @property (nonatomic, strong, readonly) id<CKComponentScopeEnumeratorProvider> scopeEnumeratorProvider;

@@ -15,7 +15,7 @@
 #import <ComponentKit/CKGlobalConfig.h>
 #import <ComponentKit/CKMacros.h>
 #import <ComponentKit/CKInternalHelpers.h>
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKFunctionalHelpers.h>
 #import <ComponentKit/CKWritingDirection.h>
 #import <ComponentKit/CKSizeAssert.h>
@@ -30,8 +30,8 @@
 #import "CKCompositeComponent.h"
 #import "CKThreadLocalComponentScope.h"
 #import "CKComponentViewConfiguration_SwiftBridge+Internal.h"
-#import "CKComponentSize_SwiftBridge+Internal.h"
-#import "CKDimension_SwiftBridge+Internal.h"
+#import "RCComponentSize_SwiftBridge+Internal.h"
+#import "RCDimension_SwiftBridge+Internal.h"
 
 const struct CKStackComponentLayoutExtraKeys CKStackComponentLayoutExtraKeys = {
   .hadOverflow = @"hadOverflow"
@@ -43,7 +43,7 @@ const struct CKStackComponentLayoutExtraKeys CKStackComponentLayoutExtraKeys = {
 @interface CKFlexboxChildCachedLayout : NSObject
 
 @property (nonatomic) CKComponent *component;
-@property (nonatomic) CKLayout componentLayout;
+@property (nonatomic) RCLayout componentLayout;
 @property (nonatomic) float width;
 @property (nonatomic) float height;
 @property (nonatomic) YGMeasureMode widthMode;
@@ -68,12 +68,12 @@ template class std::vector<CKFlexboxComponentChild>;
   // TODO: Support padding
   CGFloat _flexGrow;
   CGFloat _flexShrink;
-  CKDimension_SwiftBridge *_swiftFlexBasis;
+  RCDimension_SwiftBridge *_swiftFlexBasis;
   CKFlexboxAlignSelf _alignSelf;
   // TODO: Support position
   NSInteger _zIndex;
   // TODO: Support aspectRatio
-  CKComponentSize _sizeConstraints;
+  RCComponentSize _sizeConstraints;
   BOOL _useTextRounding;
   BOOL _useHeightAsBaseline;
 }
@@ -83,10 +83,10 @@ template class std::vector<CKFlexboxComponentChild>;
                      spacingAfter:(CGFloat)spacingAfter
                          flexGrow:(CGFloat)flexGrow
                        flexShrink:(CGFloat)flexShrink
-                   swiftFlexBasis:(CKDimension_SwiftBridge *)swiftFlexBasis
+                   swiftFlexBasis:(RCDimension_SwiftBridge *)swiftFlexBasis
                         alignSelf:(CKFlexboxAlignSelf)alignSelf
                            zIndex:(NSInteger)zIndex
-                  sizeConstraints:(CKComponentSize_SwiftBridge *)sizeConstraints
+                  sizeConstraints:(RCComponentSize_SwiftBridge *)sizeConstraints
                   useTextRounding:(BOOL)useTextRounding
               useHeightAsBaseline:(BOOL)useHeightAsBaseline
 {
@@ -111,7 +111,7 @@ template class std::vector<CKFlexboxComponentChild>;
 
 - (CKFlexboxComponentChild)child
 {
-  const auto flexBasis = _swiftFlexBasis != nil ? _swiftFlexBasis.dimension : CKRelativeDimension{};
+  const auto flexBasis = _swiftFlexBasis != nil ? _swiftFlexBasis.dimension : RCRelativeDimension{};
   return {
     .component = _component,
     .spacingBefore = _spacingBefore,
@@ -188,25 +188,34 @@ template class std::vector<CKFlexboxComponentChild>;
 }
 
 - (instancetype)initWithView:(const CKComponentViewConfiguration &)view
-                        size:(const CKComponentSize &)size
+                        size:(const RCComponentSize &)size
                        style:(const CKFlexboxComponentStyle &)style
-                    children:(CKContainerWrapper<std::vector<CKFlexboxComponentChild>> &&)children
+                    children:(std::vector<CKFlexboxComponentChild>)children
 {
   CKComponentPerfScope perfScope(self.class);
   if (self = [super initWithView:view size:size]) {
     _style = style;
-    _children = children.take();
+    _children = std::move(children);
+#if CK_ASSERTIONS_ENABLED
+    for (const auto &child : _children) {
+      if (child.component) {
+        RCAssertWithCategory(child.component.typeName != nullptr,
+                             @"non_prod_validation_T79773577",
+                             @"Expected `child.component` to be a valid object.");
+      }
+    }
+#endif
   }
   return self;
 }
 
 - (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *)swiftView
                        swiftStyle:(CKFlexboxComponentStyle_SwiftBridge *)swiftStyle
-                        swiftSize:(CKComponentSize_SwiftBridge *)swiftSize
+                        swiftSize:(RCComponentSize_SwiftBridge *)swiftSize
                     swiftChildren:(NSArray<CKFlexboxChild_SwiftBridge *> *)swiftChildren
 {
   const auto view = swiftView != nil ? swiftView.viewConfig : CKComponentViewConfiguration{};
-  const auto size = swiftSize != nil ? swiftSize.componentSize : CKComponentSize{};
+  const auto size = swiftSize != nil ? swiftSize.componentSize : RCComponentSize{};
   const auto style = swiftStyle != nil ? [swiftStyle style] : CKFlexboxComponentStyle{};
   return [self initWithView:view size:size style:style children:CK::map(swiftChildren, [](const CKFlexboxChild_SwiftBridge *swiftChild){
     return swiftChild.child;
@@ -214,11 +223,11 @@ template class std::vector<CKFlexboxComponentChild>;
 }
 
 + (instancetype)newWithView:(const CKComponentViewConfiguration &)view
-                       size:(const CKComponentSize &)size
+                       size:(const RCComponentSize &)size
                       style:(const CKFlexboxComponentStyle &)style
-                   children:(CKContainerWrapper<std::vector<CKFlexboxComponentChild>> &&)children
+                   children:(RCContainerWrapper<std::vector<CKFlexboxComponentChild>> &&)children
 {
-  return [[self alloc] initWithView:view size:size style:style children:std::move(children)];
+  return [[self alloc] initWithView:view size:size style:style children:children.take()];
 }
 
 static bool setPercentOnChildNode(const CKFlexboxComponentStyle &style) {
@@ -315,7 +324,7 @@ static float computeBaseline(YGNodeRef node, const float width, const float heig
 {
   CKFlexboxChildCachedLayout *const cachedLayout = getCKFlexboxChildCachedLayoutFromYogaNode(node, width, height);
   if ([cachedLayout.componentLayout.extra objectForKey:kCKComponentLayoutExtraBaselineKey]) {
-    CKCAssert([[cachedLayout.componentLayout.extra objectForKey:kCKComponentLayoutExtraBaselineKey] isKindOfClass:[NSNumber class]], @"You must set a NSNumber for kCKComponentLayoutExtraBaselineKey");
+    RCCAssert([[cachedLayout.componentLayout.extra objectForKey:kCKComponentLayoutExtraBaselineKey] isKindOfClass:[NSNumber class]], @"You must set a NSNumber for kCKComponentLayoutExtraBaselineKey");
     return [[cachedLayout.componentLayout.extra objectForKey:kCKComponentLayoutExtraBaselineKey] floatValue];
   }
 
@@ -333,7 +342,7 @@ static CKFlexboxChildCachedLayout* getCKFlexboxChildCachedLayoutFromYogaNode(YGN
 
   if (!CKYogaNodeCanUseCachedMeasurement(YGMeasureModeExactly, width, YGMeasureModeExactly, height, cachedLayout.widthMode, cachedLayout.width, cachedLayout.heightMode, cachedLayout.height, static_cast<float>(cachedLayout.componentLayout.size.width), static_cast<float>(cachedLayout.componentLayout.size.height), 0, 0, ckYogaDefaultConfig())) {
     const CGSize fixedSize = {width, height};
-    const CKLayout componentLayout = CKComputeComponentLayout(cachedLayout.component, convertCKSizeRangeToCKRepresentation(CKSizeRange(fixedSize, fixedSize)), convertCGSizeToCKRepresentation(cachedLayout.parentSize));
+    const RCLayout componentLayout = CKComputeComponentLayout(cachedLayout.component, convertCKSizeRangeToCKRepresentation(CKSizeRange(fixedSize, fixedSize)), convertCGSizeToCKRepresentation(cachedLayout.parentSize));
     cachedLayout.componentLayout = componentLayout;
     cachedLayout.width = width;
     cachedLayout.height = height;
@@ -505,7 +514,7 @@ static bool hasChildWithRelativePositioning(const CKFlexboxComponentChild &child
   const YGNodeRef stackNode = YGNodeNewWithConfig(ckYogaDefaultConfig());
   YGEdge spacingEdge = ygSpacingEdgeFromDirection(_style.direction);
   CGFloat savedSpacing = 0;
-  // We need this to resolve CKRelativeDimension with percentage bases
+  // We need this to resolve RCRelativeDimension with percentage bases
   CGFloat parentWidth = (constrainedSize.min.width == constrainedSize.max.width) ? constrainedSize.min.width : kCKComponentParentDimensionUndefined;
   CGFloat parentHeight = (constrainedSize.min.height == constrainedSize.max.height) ? constrainedSize.min.height : kCKComponentParentDimensionUndefined;
   CGFloat parentMainDimension = isHorizontalFlexboxDirection(_style.direction) ? parentWidth : parentHeight;
@@ -653,28 +662,28 @@ static bool hasChildWithRelativePositioning(const CKFlexboxComponentChild &child
 static void applySizeAttribute(YGNodeRef node,
                                void(*percentFunc)(YGNodeRef, float),
                                void(*pointFunc)(YGNodeRef, float),
-                               const CKRelativeDimension &childAttribute,
-                               const CKRelativeDimension &nodeAttribute,
+                               const RCRelativeDimension &childAttribute,
+                               const RCRelativeDimension &nodeAttribute,
                                CGFloat parentValue,
                                BOOL setPercentOnChildNode)
 {
   switch (childAttribute.type()) {
-    case CKRelativeDimension::Type::PERCENT:
+    case RCRelativeDimension::Type::PERCENT:
       percentFunc(node, convertFloatToYogaRepresentation(childAttribute.value() * 100));
       break;
-    case CKRelativeDimension::Type::POINTS:
+    case RCRelativeDimension::Type::POINTS:
       pointFunc(node, convertFloatToYogaRepresentation(childAttribute.value()));
       break;
-    case CKRelativeDimension::Type::AUTO:
+    case RCRelativeDimension::Type::AUTO:
       if (setPercentOnChildNode) {
         switch (nodeAttribute.type()) {
-          case CKRelativeDimension::Type::PERCENT:
+          case RCRelativeDimension::Type::PERCENT:
             percentFunc(node, convertFloatToYogaRepresentation(nodeAttribute.value() * 100));
             break;
-          case CKRelativeDimension::Type::POINTS:
+          case RCRelativeDimension::Type::POINTS:
             pointFunc(node, convertFloatToYogaRepresentation(nodeAttribute.value()));
             break;
-          case CKRelativeDimension::Type::AUTO:
+          case RCRelativeDimension::Type::AUTO:
             // Fall back to the component's size
             const CGFloat value = nodeAttribute.resolve(YGUndefined, parentValue);
             pointFunc(node, convertFloatToYogaRepresentation(value));
@@ -691,12 +700,12 @@ static void applySizeAttribute(YGNodeRef node,
 
 static void applySizeAttributes(YGNodeRef node,
                                 const CKFlexboxComponentChild &child,
-                                const CKComponentSize &nodeSize,
+                                const RCComponentSize &nodeSize,
                                 CGFloat parentWidth,
                                 CGFloat parentHeight,
                                 BOOL setPercentOnChildNode)
 {
-  const CKComponentSize childSize = child.sizeConstraints;
+  const RCComponentSize childSize = child.sizeConstraints;
 
   applySizeAttribute(node, &YGNodeStyleSetWidthPercent, &YGNodeStyleSetWidth, childSize.width, nodeSize.width, parentWidth, setPercentOnChildNode);
   applySizeAttribute(node, &YGNodeStyleSetHeightPercent, &YGNodeStyleSetHeight, childSize.height, nodeSize.height, parentHeight, setPercentOnChildNode);
@@ -708,16 +717,16 @@ static void applySizeAttributes(YGNodeRef node,
 
 static void applyPositionToEdge(YGNodeRef node, YGEdge edge, CKFlexboxDimension value)
 {
-  CKRelativeDimension dimension = value.dimension();
+  RCRelativeDimension dimension = value.dimension();
 
   switch (dimension.type()) {
-    case CKRelativeDimension::Type::PERCENT:
+    case RCRelativeDimension::Type::PERCENT:
       YGNodeStyleSetPositionPercent(node, edge, convertFloatToYogaRepresentation(dimension.value() * 100));
       break;
-    case CKRelativeDimension::Type::POINTS:
+    case RCRelativeDimension::Type::POINTS:
       YGNodeStyleSetPosition(node, edge, convertFloatToYogaRepresentation(dimension.value()));
       break;
-    case CKRelativeDimension::Type::AUTO:
+    case RCRelativeDimension::Type::AUTO:
       // no-op
       break;
   }
@@ -729,15 +738,15 @@ static void applyPaddingToEdge(YGNodeRef node, YGEdge edge, CKFlexboxDimension v
     return;
   }
 
-  CKRelativeDimension dimension = value.dimension();
+  RCRelativeDimension dimension = value.dimension();
   switch (dimension.type()) {
-    case CKRelativeDimension::Type::PERCENT:
+    case RCRelativeDimension::Type::PERCENT:
       YGNodeStyleSetPaddingPercent(node, edge, convertFloatToYogaRepresentation(dimension.value() * 100));
       break;
-    case CKRelativeDimension::Type::POINTS:
+    case RCRelativeDimension::Type::POINTS:
       YGNodeStyleSetPadding(node, edge, convertFloatToYogaRepresentation(dimension.value()));
       break;
-    case CKRelativeDimension::Type::AUTO:
+    case RCRelativeDimension::Type::AUTO:
       // no-op
       break;
   }
@@ -749,15 +758,15 @@ static void applyMarginToEdge(YGNodeRef node, YGEdge edge, CKFlexboxDimension va
     return;
   }
 
-  CKRelativeDimension relativeDimension = value.dimension();
+  RCRelativeDimension relativeDimension = value.dimension();
   switch (relativeDimension.type()) {
-    case CKRelativeDimension::Type::PERCENT:
+    case RCRelativeDimension::Type::PERCENT:
       YGNodeStyleSetMarginPercent(node, edge, convertFloatToYogaRepresentation(relativeDimension.value() * 100));
       break;
-    case CKRelativeDimension::Type::POINTS:
+    case RCRelativeDimension::Type::POINTS:
       YGNodeStyleSetMargin(node, edge, convertFloatToYogaRepresentation(relativeDimension.value()));
       break;
-    case CKRelativeDimension::Type::AUTO:
+    case RCRelativeDimension::Type::AUTO:
       YGNodeStyleSetMarginAuto(node, edge);
       break;
   }
@@ -771,7 +780,7 @@ static void applyBorderToEdge(YGNodeRef node, YGEdge edge, CKFlexboxBorderDimens
   YGNodeStyleSetBorder(node, edge, convertFloatToYogaRepresentation(value.value()));
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   const CKSizeRange sanitizedSizeRange = convertCKSizeRangeToYogaRepresentation(constrainedSize);
   // We create cache for the duration of single calculation, so it is used only on one thread
@@ -785,7 +794,7 @@ static void applyBorderToEdge(YGNodeRef node, YGEdge edge, CKFlexboxBorderDimens
   return [self layoutFromYgNode:layoutNode thatFits:constrainedSize];
 }
 
-- (CKLayout)layoutFromYgNode:(YGNodeRef)layoutNode thatFits:(CKSizeRange)constrainedSize
+- (RCLayout)layoutFromYgNode:(YGNodeRef)layoutNode thatFits:(CKSizeRange)constrainedSize
 {
   // Before we finalize layout we want to sort children according to their z-order
   // We want children with higher z-order to be closer to the end of list
@@ -802,7 +811,7 @@ static void applyBorderToEdge(YGNodeRef node, YGEdge edge, CKFlexboxBorderDimens
               return aCachedContext.zIndex < bCachedContext.zIndex;
             });
 
-  std::vector<CKLayoutChild> childrenLayout(childCount);
+  std::vector<RCLayoutChild> childrenLayout(childCount);
   const float width = convertFloatToCKRepresentation(YGNodeLayoutGetWidth(layoutNode));
   const float height = convertFloatToCKRepresentation(YGNodeLayoutGetHeight(layoutNode));
   const CGSize size = {width, height};
@@ -896,7 +905,7 @@ static void applyBorderToEdge(YGNodeRef node, YGEdge edge, CKFlexboxBorderDimens
   if (index < _children.size()) {
     return _children[index].component;
   }
-  CKFailAssertWithCategory(self.className, @"Index %u is out of bounds %lu", index, _children.size());
+  RCFailAssertWithCategory(self.className, @"Index %u is out of bounds %lu", index, _children.size());
   return nil;
 }
 

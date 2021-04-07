@@ -50,7 +50,10 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
  @param component The wrapped child component to inset. If nil, this method returns nil.
  */
 - (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *_Nullable)swiftView
-                           insets:(UIEdgeInsets)insets
+                              top:(RCDimension_SwiftBridge *)top
+                             left:(RCDimension_SwiftBridge *)left
+                           bottom:(RCDimension_SwiftBridge *)bottom
+                            right:(RCDimension_SwiftBridge *)right
                         component:(CKComponent *_Nullable)component NS_DESIGNATED_INITIALIZER;
 
 #else
@@ -61,15 +64,21 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
  @param component The wrapped child component to inset. If nil, this method returns nil.
  */
 - (instancetype)initWithView:(const CKComponentViewConfiguration &)view
-                      insets:(UIEdgeInsets)insets
+                         top:(RCRelativeDimension)top
+                        left:(RCRelativeDimension)left
+                      bottom:(RCRelativeDimension)bottom
+                       right:(RCRelativeDimension)right
                    component:(CKComponent *_Nullable)component NS_DESIGNATED_INITIALIZER;
 
 /**
  @param insets The amount of space to inset on each side.
  @param component The wrapped child component to inset. If nil, this method returns nil.
  */
-- (instancetype)initWithInsets:(UIEdgeInsets)insets
-                     component:(CKComponent *_Nullable)component;
+- (instancetype)initWithTop:(RCRelativeDimension)top
+                       left:(RCRelativeDimension)left
+                     bottom:(RCRelativeDimension)bottom
+                      right:(RCRelativeDimension)right
+                  component:(CKComponent *_Nullable)component;
 
 #endif
 

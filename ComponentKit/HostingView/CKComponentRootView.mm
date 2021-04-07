@@ -11,7 +11,7 @@
 #import "CKComponentRootView.h"
 #import "CKComponentRootViewInternal.h"
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKComponent+UIView.h>
 #import "CKComponentAttachControllerInternal.h"
 
@@ -25,13 +25,13 @@ static NSMutableArray *hitTestHooks;
 
 - (void)setAllowTapPassthrough:(BOOL)allowTapPassthrough
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   _allowTapPassthrough = allowTapPassthrough;
 }
 
 + (void)addHitTestHook:(CKComponentRootViewHitTestHook)hook
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   if (hitTestHooks == nil) {
     hitTestHooks = [NSMutableArray array];
   }
@@ -40,7 +40,7 @@ static NSMutableArray *hitTestHooks;
 
 + (NSArray *)hitTestHooks
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   return [NSArray arrayWithArray:hitTestHooks];
 }
 
@@ -64,12 +64,12 @@ static NSMutableArray *hitTestHooks;
   return superHitView;
 }
 
-- (CKLayout)mountedLayout
+- (RCLayout)mountedLayout
 {
   // It's weird to reach into ck_attachState here. ck_attachState should probably be refactored
   // to simply be a concrete method on this class, instead of a category.
   CKComponentAttachState *const attachState = CKGetAttachStateForView(self);
-  return attachState ? CKComponentAttachStateRootLayout(attachState).layout() : CKLayout();
+  return attachState ? CKComponentAttachStateRootLayout(attachState).layout() : RCLayout();
 }
 
 - (id<NSObject>)uniqueIdentifier
@@ -79,7 +79,7 @@ static NSMutableArray *hitTestHooks;
 }
 
 - (void)setAccessibilityElements:(NSArray *)accessibilityElements {
-  CKFailAssert(@"Attempt to setAccessibilityElements in %@", NSStringFromClass([self class]));
+  RCFailAssert(@"Attempt to setAccessibilityElements in %@", NSStringFromClass([self class]));
 }
 
 - (NSArray *)accessibilityElements {

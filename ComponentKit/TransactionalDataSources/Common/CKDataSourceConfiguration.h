@@ -15,20 +15,16 @@
 #import <Foundation/Foundation.h>
 
 #import <ComponentKit/CKComponentProvider.h>
-#import <ComponentKit/CKDimension.h>
+#import <RenderCore/RCDimension.h>
 
 /** Immutable value object that configures a data source */
 @interface CKDataSourceConfiguration<__covariant ModelType: id<NSObject>, __covariant ContextType: id<NSObject>> : NSObject
 
 /**
- @param componentProvider The class that provides the component (@see CKComponentProvider).
- @param context Passed to methods exposed by the protocol CKComponentProvider (@see CKComponentProvider).
+ @param componentProvider A function that generates the root component.
+ @param context Passed to the component provider.
  @param sizeRange Used for the root layout.
  */
-- (instancetype)initWithComponentProvider:(Class<CKComponentProvider>)componentProvider
-                                  context:(id<NSObject>)context
-                                sizeRange:(const CKSizeRange &)sizeRange;
-
 - (instancetype)initWithComponentProviderFunc:(CKComponent *(*)(ModelType model, ContextType context))componentProvider
                                       context:(id<NSObject>)context
                                     sizeRange:(const CKSizeRange &)sizeRange;
@@ -36,7 +32,9 @@
 @property (nonatomic, strong, readonly) ContextType context;
 
 - (const CKSizeRange &)sizeRange;
-- (CKComponentProviderBlock)componentProvider;
+
+/** Guaranteed to be non-null. (A dummy provider is substituted if necessary.) */
+- (CKComponentProviderFunc)componentProvider;
 - (BOOL)hasSameComponentProviderAndContextAs:(CKDataSourceConfiguration *)other;
 
 @end

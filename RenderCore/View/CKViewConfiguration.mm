@@ -21,12 +21,12 @@ CKViewConfiguration::CKViewConfiguration(const CKViewConfiguration&) noexcept = 
 // Prefer overloaded constructors to default arguments to prevent code bloat; with default arguments
 // the compiler must insert initialization of each default value inline at the callsite.
 CKViewConfiguration::CKViewConfiguration(CKComponentViewClass &&cls,
-                  CKContainerWrapper<CKViewComponentAttributeValueMap> &&attrs) noexcept :
+                  RCContainerWrapper<CKViewComponentAttributeValueMap> &&attrs) noexcept :
 CKViewConfiguration(std::move(cls), std::move(attrs), {}) {}
 
 CKViewConfiguration::CKViewConfiguration(CKComponentViewClass &&cls,
-                  CKContainerWrapper<CKViewComponentAttributeValueMap> &&attrs,
-                  CKAccessibilityContext &&accessibilityCtx,
+                  RCContainerWrapper<CKViewComponentAttributeValueMap> &&attrs,
+                  RCAccessibilityContext &&accessibilityCtx,
                   bool blockImplicitAnimations) noexcept
 {
   // Need to use attrs before we move it below.
@@ -71,7 +71,7 @@ std::shared_ptr<const CKViewComponentAttributeValueMap> CKViewConfiguration::att
   return rep->attributes;
 }
 
-const CKAccessibilityContext &CKViewConfiguration::accessibilityContext() const noexcept
+const RCAccessibilityContext &CKViewConfiguration::accessibilityContext() const noexcept
 {
   return rep->accessibilityContext;
 }

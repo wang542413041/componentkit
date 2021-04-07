@@ -16,7 +16,7 @@
 #import <ComponentKit/CKComponentSubclass.h>
 #import <ComponentKit/CKComponentScopeRoot.h>
 #import <ComponentKit/CKRootTreeNode.h>
-#import <ComponentKit/CKTreeNodeProtocol.h>
+#import <ComponentKit/CKTreeNode.h>
 
 @implementation CKTestRenderComponent
 {
@@ -106,8 +106,8 @@
   return nil;
 }
 
-- (void)buildComponentTree:(id<CKTreeNodeWithChildrenProtocol>)parent
-            previousParent:(id<CKTreeNodeWithChildrenProtocol> _Nullable)previousParent
+- (void)buildComponentTree:(CKTreeNode *)parent
+            previousParent:(CKTreeNode *_Nullable)previousParent
                     params:(const CKBuildComponentTreeParams &)params
       parentHasStateUpdate:(BOOL)parentHasStateUpdate
 {
@@ -115,8 +115,8 @@
   _parentHasStateUpdate = parentHasStateUpdate;
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                          restrictedToSize:(const CKComponentSize &)size
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                          restrictedToSize:(const RCComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
   _computeCalledCounter++;
@@ -191,7 +191,7 @@
   if (index < _children.size()) {
     return _children[index];
   }
-  CKFailAssertWithCategory([self class], @"Index %u is out of bounds %lu", index, _children.size());
+  RCFailAssertWithCategory([self class], @"Index %u is out of bounds %lu", index, _children.size());
   return nil;
 }
 @end

@@ -11,8 +11,6 @@
 import Foundation
 import ComponentKit
 
-#if swift(>=5.3)
-
 // MARK: ComponentInflatable
 
 /// Can be inflated to a `Component` given a `SwiftComponentModel`.
@@ -35,10 +33,12 @@ extension View where Self.Body == Never {
   }
 }
 
-public protocol ViewIdentifiable : ScopeHandleProvider {
+public protocol ViewIdentifiable : TreeNodeLinkableView {
   associatedtype ID: Hashable
   var id: ID { get }
 }
+
+public typealias ReusableView = View & ViewIdentifiable & Equatable
 
 // MARK: Non-leaf component
 
@@ -88,6 +88,13 @@ extension View where Self: ViewIdentifiable, Self.Body == Component {
 
 extension View where Self: ViewIdentifiable & Equatable, Self.Body == Component {
   public func inflateComponent(with model: SwiftComponentModel?) -> Component {
+    guard CKShouldCreateShellComponent() == false else {
+      return SwiftReusableComponent(
+        self,
+        model: model
+      )
+    }
+
     // TODO: Reuse logic
     linkPropertyWrappersWithScopeHandle()
 
@@ -97,7 +104,7 @@ extension View where Self: ViewIdentifiable & Equatable, Self.Body == Component 
 
     return SwiftReusableComponent(
       self,
-      body: CKShouldCreateShellComponent() ? nil : body,
+      body: body,
       model: model
     )
   }
@@ -221,26 +228,26 @@ extension View where Self: ViewConfigurationRepresentable & ViewIdentifiable & E
 
 private extension View {
 
-  private var linkableItems: [ScopeHandleLinkable] {
+  private var linkableItems: [TreeNodeLinkable] {
     Mirror(reflecting: self)
       .children
       .compactMap {
-        $0.value as? ScopeHandleLinkable
+        $0.value as? TreeNodeLinkable
       }
   }
 
-  private func link(linkableItems: [ScopeHandleLinkable], id: Any?) {
-    let scopeHandle = CKSwiftCreateScopeHandle(SwiftComponent<Self>.self, id)
+  private func link(linkableItems: [TreeNodeLinkable], id: Any?) {
+    let node = CKSwiftCreateNode(SwiftComponent<Self>.self, id)
     linkableItems
       .enumerated()
       .forEach { index, item in
-        item.link(with: scopeHandle, at: index)
+        item.link(with: node, at: index)
       }
   }
 
   func linkPropertyWrappersWithScopeHandle(forceRequireNode: Bool) -> Bool {
     let linkableItems = self.linkableItems
-    guard linkableItems.isEmpty == false || forceRequireNode || self is ScopeHandleProvider else {
+    guard linkableItems.isEmpty == false || forceRequireNode || self is TreeNodeLinkableView else {
       return false
     }
 
@@ -249,10 +256,8 @@ private extension View {
   }
 }
 
-private extension View where Self: ViewIdentifiable {
+extension View where Self: ViewIdentifiable {
   func linkPropertyWrappersWithScopeHandle() {
     link(linkableItems: linkableItems, id: id)
   }
 }
-
-#endif

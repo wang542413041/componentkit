@@ -13,13 +13,13 @@
 #import <pthread.h>
 #import <stack>
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKAnalyticsListener.h>
 #import <ComponentKit/CKRootTreeNode.h>
 #import <ComponentKit/CKRenderHelpers.h>
 
 #import "CKComponentScopeRoot.h"
-#import "CKScopeTreeNode.h"
+#import "CKTreeNode.h"
 
 static pthread_key_t _threadKey() noexcept
 {
@@ -41,7 +41,7 @@ CKThreadLocalComponentScope::CKThreadLocalComponentScope(CKComponentScopeRoot *p
                                                          CKBuildTrigger trigger,
                                                          BOOL shouldCollectTreeNodeCreationInformation,
                                                          BOOL alwaysBuildRenderTree,
-                                                         CKComponentCoalescingMode coalescingMode,
+                                                         RCComponentCoalescingMode coalescingMode,
                                                          BOOL enforceCKComponentSubclasses,
                                                          BOOL disableRenderToNilInCoalescedCompositeComponents)
 : newScopeRoot([previousScopeRoot newRoot]),
@@ -67,28 +67,28 @@ CKThreadLocalComponentScope::CKThreadLocalComponentScope(CKComponentScopeRoot *p
 CKThreadLocalComponentScope::~CKThreadLocalComponentScope()
 {
   stack.pop();
-  CKCAssert(stack.empty(), @"Didn't expect stack to contain anything in destructor");
-  CKCAssert(keys.size() == 1 && keys.top().empty(), @"Expected keys to be at initial state in destructor");
-  CKCAssert(ancestorHasStateUpdate.size() == 1 && ancestorHasStateUpdate.top() == NO, @"Expected ancestorHasStateUpdate to be at initial state in destructor");
+  RCCAssert(stack.empty(), @"Didn't expect stack to contain anything in destructor");
+  RCCAssert(keys.size() == 1 && keys.top().empty(), @"Expected keys to be at initial state in destructor");
+  RCCAssert(ancestorHasStateUpdate.size() == 1 && ancestorHasStateUpdate.top() == NO, @"Expected ancestorHasStateUpdate to be at initial state in destructor");
   pthread_setspecific(_threadKey(), previousScope);
 }
 
-void CKThreadLocalComponentScope::push(CKComponentScopePair scopePair, BOOL keysSupportEnabled) {
+void CKThreadLocalComponentScope::push(CKComponentScopePair scopePair, BOOL keysSupportEnabled) noexcept {
   stack.push(std::move(scopePair));
   if (keysSupportEnabled) {
     keys.push({});
   }
 }
 
-void CKThreadLocalComponentScope::push(CKComponentScopePair scopePair, BOOL keysSupportEnabled, BOOL ancestorHasStateUpdateValue) {
+void CKThreadLocalComponentScope::push(CKComponentScopePair scopePair, BOOL keysSupportEnabled, BOOL ancestorHasStateUpdateValue) noexcept {
   push(scopePair, keysSupportEnabled);
   ancestorHasStateUpdate.push(ancestorHasStateUpdateValue);
 }
 
-void CKThreadLocalComponentScope::pop(BOOL keysSupportEnabled, BOOL ancestorStateUpdateSupportEnabled) {
+void CKThreadLocalComponentScope::pop(BOOL keysSupportEnabled, BOOL ancestorStateUpdateSupportEnabled) noexcept {
   stack.pop();
   if (keysSupportEnabled) {
-    CKCAssert(
+    RCCAssert(
         keys.top().empty(),
         @"Expected keys to be cleared on pop");
     keys.pop();
@@ -99,7 +99,7 @@ void CKThreadLocalComponentScope::pop(BOOL keysSupportEnabled, BOOL ancestorStat
   }
 }
 
-void CKThreadLocalComponentScope::markCurrentScopeWithRenderComponentInTree()
+void CKThreadLocalComponentScope::markCurrentScopeWithRenderComponentInTree() noexcept
 {
   CKThreadLocalComponentScope *currentScope = CKThreadLocalComponentScope::currentScope();
   if (currentScope != nullptr) {

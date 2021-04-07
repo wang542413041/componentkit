@@ -13,47 +13,81 @@
 #if CK_NOT_SWIFT
 
 #import <functional>
-#import <unordered_map>
+#import <vector>
 #import <memory>
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKComponentScopeHandle.h>
+
+struct CKTriggerScopedResponderAndKey {
+  CKScopedResponder *responder;
+  CKScopedResponderKey key;
+
+  CKTriggerScopedResponderAndKey(CKScopedResponder *responder, CKScopedResponderKey key);
+  CKTriggerScopedResponderAndKey(id<CKComponentProtocol> component, NSString *context = @"");
+
+  auto operator== (const CKTriggerScopedResponderAndKey& rhs) const {
+    return responder == rhs.responder;
+  }
+};
 
 template<typename... T>
 class CKTriggerObservable {
-protected:
-  typedef CKScopedResponderUniqueIdentifier Key;
-  typedef void(*fn_type)(CKScopedResponder *, CKScopedResponderKey, T...);
+  using ScopedResponderAndKey = CKTriggerScopedResponderAndKey;
+  typedef void(*SpecBinderCallback)(id<CKComponentProtocol>, T...);
+  struct ObserverComponentSpec {
+    ScopedResponderAndKey scope;
+    SpecBinderCallback specCallback;
 
-  struct Value {
-    CKScopedResponder *scopedResponder;
-    CKScopedResponderKey scopedResponderKey;
-    fn_type fn;
+    auto operator== (const ObserverComponentSpec& rhs) const {
+      return scope == rhs.scope;
+    }
   };
-  std::shared_ptr<std::unordered_map<Key, Value>> _observers;
+
+protected:
+  std::shared_ptr<std::vector<ObserverComponentSpec>> _observers;
 
 public:
-  CKTriggerObservable() : _observers(std::make_shared<std::unordered_map<Key, Value>>()) {};
+  CKTriggerObservable() : _observers(std::make_shared<std::vector<ObserverComponentSpec>>()) {};
 
-  void addObserver(Key key, const Value &observer) const
+  void addObserver(const ScopedResponderAndKey& scope, const SpecBinderCallback& specCallback) const
   {
-    CKCAssert(
+    RCCAssert(
       [NSThread isMainThread],
       @"Triggers are expected to be bound/unbound on the main thread (e.g., from didInit/willDispose lifecycle events)"
     );
 
-    _observers->insert(std::make_pair(key, observer));
+    if (findObserver(scope) != _observers->end()) {
+      RCCFailAssert(@"Attempting to add duplicate observer!");
+      return;
+    }
+
+    _observers->push_back(ObserverComponentSpec{scope, specCallback});
   };
 
-  void removeObserver(Key key) const
+  void removeObserver(const ScopedResponderAndKey& scope) const
   {
-    CKCAssert(
+    RCCAssert(
       [NSThread isMainThread],
       @"Triggers are expected to be bound/unbound on the main thread (e.g., from didInit/willDispose lifecycle events)"
     );
 
-    _observers->erase(key);
+    if (findObserver(scope) == _observers->end()) {
+      RCCFailAssert(@"Observer not present!");
+      return;
+    }
+
+    _observers->erase(findObserver(scope));
   };
+
+  auto operator==(const CKTriggerObservable<T...>& rhs) const -> bool {
+    return _observers == rhs._observers;
+  }
+
+private:
+  auto findObserver(const ScopedResponderAndKey& scope) const {
+    return std::find_if(_observers->begin(), _observers->end(), [&](const auto& t){ return t.scope == scope; });
+  }
 };
 
 template<typename... T>
@@ -61,13 +95,17 @@ class CKTrigger : public CKTriggerObservable<T...> {
 public:
   void operator()(T... args) const
   {
-    CKCAssert(
+    RCCAssert(
       [NSThread isMainThread],
       @"Triggers are expected to be invoked on the main thread"
     );
 
     for (const auto &observer : *this->_observers) {
-      observer.second.fn(observer.second.scopedResponder, observer.second.scopedResponderKey, args...);
+      // Fetch the earliest component that is still alive (same as CKAction).
+      id<CKComponentProtocol> updatedComponent = [observer.scope.responder responderForKey:observer.scope.key];
+      if (updatedComponent != nil) {
+        observer.specCallback(updatedComponent, args...);
+      }
     }
   };
 };

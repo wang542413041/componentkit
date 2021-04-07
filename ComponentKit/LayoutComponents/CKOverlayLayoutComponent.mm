@@ -10,7 +10,7 @@
 
 #import "CKOverlayLayoutComponent.h"
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKMacros.h>
 #import <ComponentKit/CKComponentInternal.h>
 #import <ComponentKit/CKComponentPerfScope.h>
@@ -37,27 +37,27 @@
 
 - (unsigned int)numberOfChildren
 {
-  return CKIterable::numberOfChildren(_component, _overlay);
+  return RCIterable::numberOfChildren(_component, _overlay);
 }
 
 - (id<CKMountable>)childAtIndex:(unsigned int)index
 {
-  return CKIterable::childAtIndex(self, index, _component, _overlay);
+  return RCIterable::childAtIndex(self, index, _component, _overlay);
 }
 
 /**
  First layout the contents, then fit the overlay on top of it.
  */
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                          restrictedToSize:(const CKComponentSize &)size
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                          restrictedToSize:(const RCComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
-  CKAssert(size == CKComponentSize(),
+  RCAssert(size == RCComponentSize(),
            @"CKOverlayLayoutComponent only passes size {} to the super class initializer, but received size %@ "
            "(component=%@, overlay=%@)", size.description(), _component, _overlay);
 
   // This variable needs to be mutable so we can move from it.
-  /* const */ CKLayout contentsLayout = [_component layoutThatFits:constrainedSize parentSize:parentSize];
+  /* const */ RCLayout contentsLayout = [_component layoutThatFits:constrainedSize parentSize:parentSize];
 
   const auto contentsLayoutSize = contentsLayout.size;
 
@@ -65,11 +65,11 @@
     self,
     contentsLayoutSize,
     _overlay
-    ? std::vector<CKLayoutChild> {
+    ? std::vector<RCLayoutChild> {
       {{0,0}, std::move(contentsLayout)},
       {{0,0}, [_overlay layoutThatFits:{contentsLayoutSize, contentsLayoutSize} parentSize:contentsLayoutSize]},
     }
-    : std::vector<CKLayoutChild> {
+    : std::vector<RCLayoutChild> {
       {{0,0}, std::move(contentsLayout)},
     }
   };

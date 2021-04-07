@@ -11,58 +11,40 @@
 import Foundation
 import ComponentKit
 
-#if swift(>=5.3)
-
 @propertyWrapper
-// TODO: Change to struct and use read/write reflection mechanism
-public class State<Value> : ScopeHandleLinkable {
-  private let valueProvider: () -> Value
-  private var link: (handle: CKComponentScopeHandle, index: Int)?
+// TODO: Use read/write reflection mechanism
+public struct State<Value> : TreeNodeLinkable {
+  private let store: TreeNodeValueStore<Value>
 
   public init(wrappedValue valueProvider: @escaping @autoclosure () -> Value) {
-    self.valueProvider = valueProvider
+    self.store = TreeNodeValueStore(valueProvider: valueProvider)
   }
 
   /// Should only be called during component build or on the main thread thereafter
   public var wrappedValue: Value {
     get {
-      guard let link = link else {
-        fatalError("Attempting to read state before `-body`.")
-      }
-      let untypedValue = CKSwiftFetchState(link.handle, link.index)
-      guard let value = untypedValue as? Value else {
-        fatalError("Unexpected value \(String(describing: untypedValue))")
-      }
-      return value
+      store.get()
     }
 
     /// Should only be called on the main thread
-    set {
-      guard let link = link else {
-        fatalError("Attempting to write state before `-body`.")
-      }
-
-      CKSwiftUpdateState(link.handle, link.index, newValue)
+    nonmutating set {
+      store.set(newValue)
     }
   }
 
   public var projectedValue: Binding<Value> {
-    precondition(link != nil, "Attempting to get binding before `-body`")
-    return Binding(state: self)
+    return Binding(get: { self.wrappedValue }, set: { self.wrappedValue = $0 })
   }
 
-  // MARK: ScopeHandleLinkable
+  // MARK: TreeNodeLinkable
 
-  func link(with handle: CKComponentScopeHandle, at index: Int) {
-    link = (handle, index)
-    CKSwiftInitializeState(handle, index, valueProvider)
+  func link(with node: CKTreeNode, at index: Int) {
+    store.link(with: node, at: index)
   }
 }
 
 extension State : Equatable where Value : Equatable {
   static public func ==(lhs: State, rhs: State) -> Bool {
-    return lhs.wrappedValue == rhs.wrappedValue
+    lhs.wrappedValue == rhs.wrappedValue
   }
 }
-
-#endif

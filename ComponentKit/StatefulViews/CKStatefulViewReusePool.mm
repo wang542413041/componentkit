@@ -9,9 +9,9 @@
  */
 #import "CKStatefulViewComponentController.h"
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKCollection.h>
-#import <ComponentKit/CKDispatch.h>
+#import <ComponentKit/RCDispatch.h>
 
 #import "CKStatefulViewReusePool.h"
 
@@ -24,7 +24,7 @@ struct FBStatefulReusePoolItemEntry {
 
 class FBStatefulReusePoolItem {
 public:
-  UIView *viewWithPreferredSuperview(UIView *preferredSuperview)
+  UIView *viewWithPreferredSuperview(UIView *preferredSuperview) noexcept
   {
     if (_entries.empty()) {
       return nil;
@@ -57,17 +57,17 @@ public:
     return nil;
   };
 
-  NSUInteger viewCount()
+  NSUInteger viewCount() noexcept
   {
     return _entries.size();
   };
 
-  void addEntry(const FBStatefulReusePoolItemEntry &entry)
+  void addEntry(const FBStatefulReusePoolItemEntry &entry) noexcept
   {
     _entries.push_back(entry);
   };
 
-  void absorbPendingPool(const FBStatefulReusePoolItem &otherPool, NSInteger maxEntries)
+  void absorbPendingPool(const FBStatefulReusePoolItem &otherPool, NSInteger maxEntries) noexcept
   {
     for (const FBStatefulReusePoolItemEntry &entry : otherPool._entries) {
       // In the future, we should consider not evaluating the block here immediately, and letting it move into the
@@ -116,11 +116,21 @@ struct PoolKeyHasher {
                                preferredSuperview:(UIView *)preferredSuperview
                                           context:(id)context
 {
-  CKAssertMainThread();
-  CKAssertNotNil(controllerClass, @"Must provide a controller class");
+  RCAssertMainThread();
+  RCAssertNotNil(controllerClass, @"Must provide a controller class");
   const std::pair<__unsafe_unretained Class, id> key = std::make_pair(controllerClass, context);
   const auto it = _pool.find(key);
   if (it == _pool.end()) { // Avoid overhead of creating the item unless it already exists
+    return nil;
+  }
+  if (![it->first.first isContextValid:it->first.second]) {
+    // Context is invalid. This generally should not happen
+    // since invalid context == non reacreatable context
+    // But we still handle it to make sure that behaviour is
+    // well defined
+
+    // Remove views with invalid context from reuse pool
+    _pool.erase(it);
     return nil;
   }
   UIView *candidate = it->second.viewWithPreferredSuperview(preferredSuperview);
@@ -139,10 +149,17 @@ struct PoolKeyHasher {
                     context:(id)context
          mayRelinquishBlock:(CKStatefulViewReusePoolPendingMayRelinquishBlock)mayRelinquishBlock
 {
-  CKAssertMainThread();
-  CKAssertNotNil(view, @"Must provide a view");
-  CKAssertNotNil(controllerClass, @"Must provide a controller class");
-  CKAssertNotNil(mayRelinquishBlock, @"Must provide a relinquish block");
+  RCAssertMainThread();
+  RCAssertNotNil(view, @"Must provide a view");
+  RCAssertNotNil(controllerClass, @"Must provide a controller class");
+  RCAssertNotNil(mayRelinquishBlock, @"Must provide a relinquish block");
+
+  // Shortcut for invalid contexts. If context is invalid
+  // by the time when it is being added to the pool, we should
+  // drop it immediately
+  if (![controllerClass isContextValid:context]) {
+    return;
+  }
 
   auto const addEntry = ^{
     auto &poolItem = _pendingPool[std::make_pair(controllerClass, context)];
@@ -153,7 +170,7 @@ struct PoolKeyHasher {
   } else {
     // Using this function instead of dispatch_async to make sure there are no ordering issues with regard to enqueueing
     // the pending purge below.
-    CKDispatchMainDefaultMode(addEntry);
+    RCDispatchMainDefaultMode(addEntry);
   }
 
   if (_enqueuedPendingPurge) {
@@ -162,16 +179,23 @@ struct PoolKeyHasher {
   _enqueuedPendingPurge = YES;
   // Wait for the run loop to turn over before trying to relinquish the view. That ensures that if we are remounted on
   // a different root view, we reuse the same view (since didMount will be called immediately after didUnmount).
-  CKDispatchMainDefaultMode(^{
+  RCDispatchMainDefaultMode(^{
     self->_enqueuedPendingPurge = NO;
     [self purgePendingPool];
+    [self dropViewsWithInvalidContext];
   });
 }
 
 - (void)purgePendingPool
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   for (const auto &it : _pendingPool) {
+    // Ignore items that already can't be reused to save some cycles
+    BOOL isContextValid = [it.first.first isContextValid:it.first.second];
+    if (!isContextValid) {
+      continue;
+    }
+
     // maximumPoolSize will be -1 by default
     NSInteger maximumPoolSize = [it.first.first maximumPoolSize:it.first.second];
 
@@ -181,6 +205,17 @@ struct PoolKeyHasher {
   _clearingPendingPool = YES;
   _pendingPool.clear();
   _clearingPendingPool = NO;
+}
+
+- (void)dropViewsWithInvalidContext {
+  RCAssertMainThread();
+  for (auto it = _pool.begin(); it != _pool.end();) {
+    if (![it->first.first isContextValid:it->first.second]) {
+      it = _pool.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 @end

@@ -26,8 +26,6 @@
 @protocol CKAnalyticsListener;
 @protocol CKComponentProtocol;
 @protocol CKComponentControllerProtocol;
-@protocol CKTreeNodeProtocol;
-@protocol CKTreeNodeWithChildrenProtocol;
 
 @class CKComponentScopeRoot;
 

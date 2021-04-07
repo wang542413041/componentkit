@@ -11,8 +11,6 @@
 import Foundation
 import ComponentKit
 
-#if swift(>=5.3)
-
 /// Represents a parameter-less action.
 public struct Action {
   /// The type erased handler representing the action.
@@ -125,7 +123,7 @@ public struct ActionWith<Param> {
 }
 
 /// Marker protocol to indicate that a view can supply actions.
-public protocol Actionable : ScopeHandleProvider { }
+public protocol Actionable : TreeNodeLinkableView { }
 
 extension View where Self: Actionable {
   public func onAction<Param>(_ handler: @escaping (Self, Param) -> Void) -> ActionWith<Param> {
@@ -179,5 +177,3 @@ private struct ScopedResponderActionResolver<View: CKSwift.View> {
     return component.view
   }
 }
-
-#endif

@@ -13,7 +13,7 @@
 #import <mutex>
 
 #import <ComponentKit/CKAnalyticsListener.h>
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKBuildComponent.h>
 #import <ComponentKit/CKComponentController.h>
 #import <ComponentKit/CKComponentControllerEvents.h>
@@ -27,7 +27,7 @@
 
 static void *kAffinedQueueKey = &kAffinedQueueKey;
 
-#define CKAssertAffinedQueue() CKCAssert(_isRunningOnAffinedQueue(), @"This method must only be called on the affined queue")
+#define RCAssertAffinedQueue() RCCAssert(_isRunningOnAffinedQueue(), @"This method must only be called on the affined queue")
 
 struct CKComponentGeneratorInputs {
   CK::NonNull<CKComponentScopeRoot *> scopeRoot;
@@ -36,22 +36,22 @@ struct CKComponentGeneratorInputs {
 
   CKComponentGeneratorInputs(CK::NonNull<CKComponentScopeRoot *> scopeRoot) : scopeRoot(std::move(scopeRoot)) { }
 
-  void updateModel(id<NSObject> model) {
+  void updateModel(id<NSObject> model) noexcept {
     _didUpdateModelOrContext = _didUpdateModelOrContext || (model != _model);
     _model = model;
   }
 
-  void updateContext(id<NSObject> context) {
+  void updateContext(id<NSObject> context) noexcept {
     _didUpdateModelOrContext = _didUpdateModelOrContext || (context != _context);
     _context = context;
   }
 
-  void updateTraitCollection(UITraitCollection *traitCollection) {
-    _didUpdateTraitCollection = _didUpdateTraitCollection || !CKObjectIsEqual(traitCollection, _traitCollection);
+  void updateTraitCollection(UITraitCollection *traitCollection) noexcept {
+    _didUpdateTraitCollection = _didUpdateTraitCollection || !RCObjectIsEqual(traitCollection, _traitCollection);
     _traitCollection = [traitCollection copy];
   }
 
-  void updateAccessibilityStatus(BOOL isAccessibilityEnabled) {
+  void updateAccessibilityStatus(BOOL isAccessibilityEnabled) noexcept {
     _didAccessibilityChange = _didAccessibilityChange || (isAccessibilityEnabled != _isAccessibilityEnabled);
     _isAccessibilityEnabled = isAccessibilityEnabled;
   }
@@ -83,11 +83,11 @@ struct CKComponentGeneratorInputs {
       stateUpdates == i.stateUpdates &&
       forceReloadInNextGeneration == i.forceReloadInNextGeneration &&
       _didUpdateModelOrContext == i._didUpdateModelOrContext &&
-      CKObjectIsEqual(_traitCollection, i._traitCollection) &&
+      RCObjectIsEqual(_traitCollection, i._traitCollection) &&
       _isAccessibilityEnabled == i._isAccessibilityEnabled;
   }
 
-  void reset(CK::NonNull<CKComponentScopeRoot *> newScopeRoot) {
+  void reset(CK::NonNull<CKComponentScopeRoot *> newScopeRoot) noexcept {
     scopeRoot = newScopeRoot;
     stateUpdates = {};
     _didUpdateModelOrContext = NO;
@@ -137,7 +137,7 @@ struct CKComponentGeneratorInputsStore {
   template <typename T>
   T acquireInputs(NS_NOESCAPE T(^block)(CKComponentGeneratorInputs &)) {
     if (_affinedQueue) {
-      CKAssertAffinedQueue();
+      RCAssertAffinedQueue();
       return block(_inputs);
     } else {
       std::lock_guard<std::mutex> lock(_inputsMutex);
@@ -422,7 +422,7 @@ static std::vector<CKComponentController *> _addedComponentControllersBetweenSco
                     metadata:(const CKStateUpdateMetadata &)metadata
                         mode:(CKUpdateMode)mode
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
 
   const auto enqueueStateUpdate = ^{
     _inputsStore->acquireInputs(^(CKComponentGeneratorInputs &inputs){

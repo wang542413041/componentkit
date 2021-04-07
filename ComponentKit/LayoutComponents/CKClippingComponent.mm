@@ -1,6 +1,6 @@
 #import <ComponentKit/CKClippingComponent.h>
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKComponentSubclass.h>
 #import <ComponentKit/CKLayoutComponent.h>
 
@@ -11,7 +11,7 @@ CK_INIT_UNAVAILABLE;
 CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
 
 + (instancetype)newWithComponent:(CKComponent *)child
-                            size:(const CKComponentSize &)size
+                            size:(const RCComponentSize &)size
                clippedDimensions:(CK::ClippingComponentDimensions)dimensions;
 @end
 
@@ -21,7 +21,7 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
 }
 
 + (instancetype)newWithComponent:(CKComponent *)component
-                            size:(const CKComponentSize &)size
+                            size:(const RCComponentSize &)size
                clippedDimensions:(CK::ClippingComponentDimensions)dimensions
 {
   if (component == nil) {
@@ -43,16 +43,16 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
 
 - (unsigned int)numberOfChildren
 {
-  return CKIterable::numberOfChildren(_component);
+  return RCIterable::numberOfChildren(_component);
 }
 
-- (id<CKIterable>)childAtIndex:(unsigned int)index
+- (id<RCIterable>)childAtIndex:(unsigned int)index
 {
-  return CKIterable::childAtIndex(self, index, _component);
+  return RCIterable::childAtIndex(self, index, _component);
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                          restrictedToSize:(const CKComponentSize &)size
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                          restrictedToSize:(const RCComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
   auto const resolvedRange = constrainedSize.intersect(size.resolve(parentSize));
@@ -76,7 +76,7 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
     self,
     // This component will always have the "normal" size as if the child *was* always constrained.
     resolvedRange.clamp(childLayout.size),
-    std::vector<CKLayoutChild> {
+    std::vector<RCLayoutChild> {
       {CGPointZero, finalLayout}
     }
   };
@@ -90,14 +90,14 @@ static auto adjustedMaxSizeForClippedDimensions(CGSize originalMaxSize, CK::Clip
     case CK::ClippingComponentDimensions::height:
       return {originalMaxSize.width, INFINITY};
     case CK::ClippingComponentDimensions::none:
-      CKCFailAssert(@"When no dimension is clipped, the original size constraints must be used");
+      RCCFailAssert(@"When no dimension is clipped, the original size constraints must be used");
       return originalMaxSize;
   }
 }
 
 @end
 
-auto CK::BuilderDetails::ClippingComponentDetails::factory(CKComponent *component, const CKComponentSize &size, CK::ClippingComponentDimensions dimensions) -> CKComponent *
+auto CK::BuilderDetails::ClippingComponentDetails::factory(CKComponent *component, const RCComponentSize &size, CK::ClippingComponentDimensions dimensions) -> CKComponent *
 {
   return [CKClippingComponent newWithComponent:component size:size clippedDimensions:dimensions];
 }

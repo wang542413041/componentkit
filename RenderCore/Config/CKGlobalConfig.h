@@ -13,8 +13,8 @@
 #if CK_NOT_SWIFT
 
 #import <Foundation/Foundation.h>
-#import <RenderCore/CKComponentCoalescingMode.h>
-#import <RenderCore/CKComponentBasedAccessibilityMode.h>
+#import <RenderCore/RCComponentCoalescingMode.h>
+#import <RenderCore/RCComponentBasedAccessibilityMode.h>
 
 @protocol CKAnalyticsListener;
 
@@ -40,11 +40,11 @@ struct CKGlobalConfig {
   /**
    Component coalescing mode.
    */
-  CKComponentCoalescingMode coalescingMode = CKComponentCoalescingModeNone;
+  RCComponentCoalescingMode coalescingMode = RCComponentCoalescingModeRender;
   /**
    Component based accessibility mode
    */
-  CKComponentBasedAccessibilityMode componentAXMode = CKComponentBasedAccessibilityModeDisabled;
+  RCComponentBasedAccessibilityMode componentAXMode = RCComponentBasedAccessibilityModeDisabled;
   /**
    Kill-switch to disable render-to-nil in coalesced composite components.
    */
@@ -57,6 +57,22 @@ struct CKGlobalConfig {
    Force mounting views for component with accessibilityContext set even when VoiceOver is not enabled
    */
   BOOL alwaysMountViewForAccessibityContextComponent = NO;
+  /**
+   Enables caching of the layout for reused components.
+   */
+  BOOL enableLayoutCaching = NO;
+  /**
+   In Specs we provide a custom identifier, which is a function pointer to the
+   handler function. This bool enables using this identifier in == operator
+   instead of comparing blocks.
+   */
+  BOOL actionShouldCompareCustomIdentifier = NO;
+
+  /**
+   Flag to use the custom identifer provided by the spec instead of block pointer
+   when generating an identifier string for an action
+   */
+  BOOL actionShouldUseCustomIdentifierInIdentifierString = NO;
 };
 
 CKGlobalConfig CKReadGlobalConfig();

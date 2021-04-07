@@ -10,7 +10,7 @@
 
 #import "CKComponentFlexibleSizeRangeProvider.h"
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKMacros.h>
 
 @implementation CKComponentFlexibleSizeRangeProvider {
@@ -40,8 +40,9 @@
     case CKComponentSizeRangeFlexibleWidthAndHeight:
       return CKSizeRange(); // Default constructor creates unconstrained range
     case CKComponentSizeRangeFlexibilityNone:
-    default:
       return CKSizeRange(size, size);
+    case CKComponentSizeRangeFitContent:
+      return CKSizeRange(CGSizeZero, size);
   }
 }
 

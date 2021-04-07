@@ -10,7 +10,7 @@
 
 #import <Foundation/Foundation.h>
 #import <RenderCore/CKDefines.h>
-#import <RenderCore/CKIterable.h>
+#import <RenderCore/RCIterable.h>
 
 #if CK_NOT_SWIFT
 
@@ -21,8 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol CKMountable;
 
-struct CKLayout;
-struct CKLayoutChild;
+struct RCLayout;
+struct RCLayoutChild;
 
 struct CKComponentViewContext {
   __kindof UIView *_Nullable view;
@@ -35,7 +35,7 @@ struct CKMountInfo {
   CKComponentViewContext viewContext;
 };
 
-@protocol CKMountable <CKIterable>
+@protocol CKMountable <RCIterable>
 
 /**
  Call this on children components to compute their layouts.
@@ -47,7 +47,7 @@ struct CKMountInfo {
 
  @return A struct defining the layout of the receiver and its children.
  */
-- (CKLayout)layoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)layoutThatFits:(CKSizeRange)constrainedSize
                 parentSize:(CGSize)parentSize;
 
 /**
@@ -87,7 +87,7 @@ struct CKMountInfo {
  used to specify that subcomponents should be mounted inside the view.
  */
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                      layout:(const CKLayout &)layout
+                                      layout:(const RCLayout &)layout
                               supercomponent:(id<CKMountable> _Nullable)supercomponent;
 
 /**
@@ -117,7 +117,7 @@ Unmounts the component:
 NS_ASSUME_NONNULL_BEGIN
 
 NS_SWIFT_NAME(Mountable)
-@protocol CKMountable <CKIterable>
+@protocol CKMountable <RCIterable>
 @end
 
 #endif

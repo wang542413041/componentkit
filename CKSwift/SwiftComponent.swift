@@ -11,8 +11,6 @@
 import Foundation
 import ComponentKit
 
-#if swift(>=5.3)
-
 public struct SwiftComponentModel {
   struct LifecycleCallbacks {
     typealias Callback = @convention(block) () -> Void
@@ -58,7 +56,7 @@ public struct SwiftComponentModel {
   }
 }
 
-public class SwiftComponent<View: CKSwift.View> : CKSwiftComponent {
+class SwiftComponent<View: CKSwift.View> : CKSwiftComponent {
   let view: View
 
   init(_ view: View, body: Component? = nil, viewConfiguration: ViewConfiguration? = nil, size: ComponentSize? = nil, model: SwiftComponentModel?) {
@@ -77,20 +75,27 @@ public class SwiftComponent<View: CKSwift.View> : CKSwiftComponent {
       child: body
     )
   }
+
+  override var typeName: UnsafePointer<Int8> {
+    // Swift components can either be a `SwiftComponent<View>`, `SwiftReusableComponent<View>` or
+    // `SwiftReusableLeafComponent<View>` based on the capabilities of `View`.
+    // Always use `SwiftComponent<View>` as the `typeName` so that CKSwift's infra doesn't have
+    // to know which concrete subclass is being used. Really what's important is the `View` part
+    // which suffices to identify the component.
+    class_getName(SwiftComponent<View>.self)
+  }
 }
 
-public typealias SwiftReusableComponentView = CKSwift.View & ViewIdentifiable & Equatable
-
-public class SwiftReusableBaseComponent<View: SwiftReusableComponentView> : SwiftComponent<View>, ReusableComponentProtocol {
-  public var componentIdentifier: Any? {
+class SwiftReusableBaseComponent<View: ReusableView> : SwiftComponent<View>, ReusableComponentProtocol {
+  var componentIdentifier: Any? {
     view.id
   }
 
-  public func didReuseComponent(_ component: ReusableComponentProtocol) {
+  func didReuseComponent(_ component: ReusableComponentProtocol) {
     fatalError("Should never be called")
   }
 
-  public func shouldComponentUpdate(_ untypedComponent: ReusableComponentProtocol) -> Bool {
+  func shouldComponentUpdate(_ untypedComponent: ReusableComponentProtocol) -> Bool {
     guard let component = untypedComponent as? SwiftReusableBaseComponent<View> else {
       fatalError("Attempting to reuse a component of a different type: \(type(of: untypedComponent))")
     }
@@ -98,21 +103,31 @@ public class SwiftReusableBaseComponent<View: SwiftReusableComponentView> : Swif
     return view != component.view
   }
 
-  public func clone() -> Self {
+  func clone() -> Self {
     fatalError("-clone should never be called on `SwiftReusableBaseComponent`.")
   }
 }
 
-public final class SwiftReusableComponent<View: SwiftReusableComponentView> : SwiftReusableBaseComponent<View> where View.Body == Component {
-  override public func clone() -> Self {
-    SwiftReusableComponent(self, body: view.body) as! Self
+final class SwiftReusableComponent<View: ReusableView> : SwiftReusableBaseComponent<View> where View.Body == Component {
+  override func clone() -> Self {
+    // TODO: Reuse logic
+    view.linkPropertyWrappersWithScopeHandle()
+
+    defer {
+      CKSwiftPopClass()
+    }
+    return SwiftReusableComponent(self, body: view.body) as! Self
   }
 }
 
-public final class SwiftReusableLeafComponent<View: SwiftReusableComponentView> : SwiftReusableBaseComponent<View> where View.Body == Never {
-  override public func clone() -> Self {
-    SwiftReusableLeafComponent(self) as! Self
+final class SwiftReusableLeafComponent<View: ReusableView> : SwiftReusableBaseComponent<View> where View.Body == Never {
+  override func clone() -> Self {
+    // TODO: Reuse logic
+    view.linkPropertyWrappersWithScopeHandle()
+
+    defer {
+      CKSwiftPopClass()
+    }
+    return SwiftReusableLeafComponent(self) as! Self
   }
 }
-
-#endif

@@ -12,9 +12,9 @@
 
 #if CK_NOT_SWIFT
 
-#import <ComponentKit/CKEqualityHelpers.h>
+#import <ComponentKit/RCEqualityHelpers.h>
 #import <ComponentKit/CKFunctionalHelpers.h>
-#import <ComponentKit/CKGeometryHelpers.h>
+#import <RenderCore/RCGeometryHelpers.h>
 
 // This is temporary needed until we migrate existing imports.
 

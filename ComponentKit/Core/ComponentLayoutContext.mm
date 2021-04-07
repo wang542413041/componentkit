@@ -13,7 +13,7 @@
 #import <pthread.h>
 #import <stack>
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKComponent.h>
 
 using namespace CK::Component;
@@ -21,7 +21,7 @@ using namespace CK::Component;
 static pthread_key_t kCKLayoutContextThreadKey;
 
 struct ThreadKeyInitializer {
-  static void destroyStack(LayoutContextValue *p) { delete p; }
+  static void destroyStack(LayoutContextValue *p) noexcept { delete p; }
   ThreadKeyInitializer() { pthread_key_create(&kCKLayoutContextThreadKey, (void (*)(void*))destroyStack); }
 };
 
@@ -56,7 +56,7 @@ LayoutContext::LayoutContext(CKComponent *c, CKSizeRange r) : component(c), size
 LayoutContext::~LayoutContext()
 {
   auto &stack = componentValue().stack;
-  CKCAssert(stack.back() == this,
+  RCCAssert(stack.back() == this,
             @"Last component layout context %@ is not %@", stack.back()->component, component);
   stack.pop_back();
   if (stack.empty()) {
@@ -64,7 +64,7 @@ LayoutContext::~LayoutContext()
   }
 }
 
-const CK::Component::LayoutContextStack &LayoutContext::currentStack()
+const CK::Component::LayoutContextStack &LayoutContext::currentStack() noexcept
 {
   return componentValue().stack;
 }
@@ -80,7 +80,7 @@ static auto componentClassString(CKComponent *component) -> NSString * {
   }
 }
 
-NSString *LayoutContext::currentStackDescription()
+NSString *LayoutContext::currentStackDescription() noexcept
 {
   const auto &stack = componentValue().stack;
   NSMutableString *s = [NSMutableString string];
@@ -98,7 +98,7 @@ NSString *LayoutContext::currentStackDescription()
   return s;
 }
 
-NSString *LayoutContext::currentRootComponentClassName()
+NSString *LayoutContext::currentRootComponentClassName() noexcept
 {
   const auto &stack = componentValue().stack;
   return stack.empty() ? @"" : componentClassString(stack[0]->component);

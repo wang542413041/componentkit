@@ -18,10 +18,10 @@
 #import <UIKit/UIKit.h>
 
 #import <RenderCore/ComponentViewReuseUtilities.h>
-#import <RenderCore/CKAccessibilityContext.h>
+#import <RenderCore/RCAccessibilityContext.h>
 #import <RenderCore/CKComponentViewAttribute.h>
 #import <RenderCore/CKComponentViewClass.h>
-#import <RenderCore/CKContainerWrapper.h>
+#import <RenderCore/RCContainerWrapper.h>
 
 typedef void (^CKComponentViewReuseBlock)(UIView *);
 
@@ -41,11 +41,11 @@ struct CKViewConfiguration {
   // Prefer overloaded constructors to default arguments to prevent code bloat; with default arguments
   // the compiler must insert initialization of each default value inline at the callsite.
   CKViewConfiguration(CKComponentViewClass &&cls,
-                      CKContainerWrapper<CKViewComponentAttributeValueMap> &&attrs) noexcept;
+                      RCContainerWrapper<CKViewComponentAttributeValueMap> &&attrs) noexcept;
 
   CKViewConfiguration(CKComponentViewClass &&cls,
-                      CKContainerWrapper<CKViewComponentAttributeValueMap> &&attrs,
-                      CKAccessibilityContext &&accessibilityCtx,
+                      RCContainerWrapper<CKViewComponentAttributeValueMap> &&attrs,
+                      RCAccessibilityContext &&accessibilityCtx,
                       bool blockImplicitAnimations = false) noexcept;
 
   ~CKViewConfiguration();
@@ -54,7 +54,7 @@ struct CKViewConfiguration {
 
   std::shared_ptr<const CKViewComponentAttributeValueMap> attributes() const noexcept;
 
-  const CKAccessibilityContext &accessibilityContext() const noexcept;
+  const RCAccessibilityContext &accessibilityContext() const noexcept;
 
   BOOL isDefaultConfiguration() const;
 
@@ -68,7 +68,7 @@ private:
   struct Repr {
     CKComponentViewClass viewClass;
     std::shared_ptr<const CKViewComponentAttributeValueMap> attributes;
-    CKAccessibilityContext accessibilityContext;
+    RCAccessibilityContext accessibilityContext;
     CK::Component::PersistentAttributeShape attributeShape;
     bool blockImplicitAnimations;
   };
@@ -95,7 +95,7 @@ namespace std {
         std::hash<CKViewComponentAttributeValueMap>()(*cl.attributes()),
         std::hash<bool>()(cl.blockImplicitAnimations()),
       };
-      return CKIntegerArrayHash(subhashes, std::end(subhashes) - std::begin(subhashes));
+      return RCIntegerArrayHash(subhashes, std::end(subhashes) - std::begin(subhashes));
     }
   };
 }

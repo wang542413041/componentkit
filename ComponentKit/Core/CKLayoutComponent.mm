@@ -16,31 +16,23 @@
 
 @implementation CKLayoutComponent
 
-- (void)buildComponentTree:(id<CKTreeNodeWithChildrenProtocol>)parent
-            previousParent:(id<CKTreeNodeWithChildrenProtocol> _Nullable)previousParent
-                    params:(const CKBuildComponentTreeParams &)params
-      parentHasStateUpdate:(BOOL)parentHasStateUpdate
-{
-  CKRender::ComponentTree::Iterable::build(self, parent, previousParent, params, parentHasStateUpdate);
-}
-
 #pragma mark - CKMountable
 
 - (unsigned int)numberOfChildren
 {
-  CKFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
+  RCFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
   return 0;
 }
 
 - (id<CKMountable>)childAtIndex:(unsigned int)index
 {
-  CKFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
+  RCFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
   return nil;
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
-  CKFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
+  RCFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
   return [super computeLayoutThatFits:constrainedSize];
 }
 

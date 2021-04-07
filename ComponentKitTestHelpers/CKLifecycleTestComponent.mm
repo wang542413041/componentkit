@@ -45,14 +45,14 @@ auto CKLifecycleTestComponentSetShouldEarlyReturnNew(BOOL shouldEarlyReturnNew) 
   return [super newWithView:{[UIView class], std::move(attrs)} size:{}];
 }
 
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view size:(const CKComponentSize &)size
++ (instancetype)newWithView:(const CKComponentViewConfiguration &)view size:(const RCComponentSize &)size
 {
   CKComponentScope scope(self); // components with controllers must have a scope
   return [super newWithView:view size:size];
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                          restrictedToSize:(const CKComponentSize &)size
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                          restrictedToSize:(const RCComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
   const auto result = [super computeLayoutThatFits:constrainedSize
@@ -180,9 +180,9 @@ auto CKLifecycleTestComponentSetShouldEarlyReturnNew(BOOL shouldEarlyReturnNew) 
   _calledInvalidateController = YES;
 }
 
-- (void)didPrepareLayout:(const CKLayout &)layout forComponent:(CKComponent *)component
+- (void)didPrepareLayout:(const RCLayout &)layout forComponent:(CKComponent *)component
 {
-  CKAssertMainThread();
+  RCAssertMainThread();
   _calledDidPrepareLayoutForComponent = YES;
 }
 

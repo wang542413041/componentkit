@@ -19,13 +19,14 @@
 #import <ComponentKit/CKMutex.h>
 
 #include <tuple>
+#include <atomic>
 
 #import "CKThreadLocalComponentScope.h"
 #import "CKRenderHelpers.h"
 
 namespace CK {
 namespace TreeNode {
-  id<CKTreeNodeProtocol> nodeForComponent(id<CKComponentProtocol> component)
+  CKTreeNode *nodeForComponent(id<CKComponentProtocol> component)
   {
     CKThreadLocalComponentScope *currentScope = CKThreadLocalComponentScope::currentScope();
     if (currentScope == nullptr) {
@@ -40,7 +41,7 @@ namespace TreeNode {
     if ([node.scopeHandle acquireFromComponent:component]) {
       return node;
     }
-    CKCAssertWithCategory([component.class controllerClass] == nil ||
+    RCCAssertWithCategory([component.class controllerClass] == nil ||
                           CKSubclassOverridesInstanceMethod([CKComponent class], component.class, @selector(buildController)) ||
                           [component conformsToProtocol:@protocol(CKRenderComponentProtocol)],
                           NSStringFromClass([component class]),
@@ -54,7 +55,7 @@ namespace TreeNode {
 
 
 @interface CKTreeNode ()
-@property (nonatomic, weak, readwrite) id<CKTreeNodeComponentProtocol> component;
+@property (nonatomic, weak, readwrite) id<CKComponentProtocol> component;
 @property (nonatomic, strong, readwrite) CKComponentScopeHandle *scopeHandle;
 @property (nonatomic, assign, readwrite) CKTreeNodeIdentifier nodeIdentifier;
 @end
@@ -62,45 +63,29 @@ namespace TreeNode {
 @implementation CKTreeNode
 
 // Base initializer
-- (instancetype)initWithPreviousNode:(id<CKTreeNodeProtocol>)previousNode
+- (instancetype)initWithPreviousNode:(CKTreeNode *)previousNode
                          scopeHandle:(CKComponentScopeHandle *)scopeHandle
 {
-  static int32_t nextGlobalIdentifier = 0;
+  static std::atomic_int32_t nextGlobalIdentifier = 0;
   if (self = [super init]) {
     _scopeHandle = scopeHandle;
-    _nodeIdentifier = previousNode ? previousNode.nodeIdentifier : OSAtomicIncrement32(&nextGlobalIdentifier);
+    _nodeIdentifier = previousNode ? previousNode.nodeIdentifier : ++nextGlobalIdentifier;
+    _scopeHandle.treeNode = self;
   }
   return self;
 }
 
 // Render initializer
 - (instancetype)initWithComponent:(id<CKRenderComponentProtocol>)component
-                           parent:(id<CKTreeNodeWithChildrenProtocol>)parent
-                   previousParent:(id<CKTreeNodeWithChildrenProtocol>)previousParent
+                           parent:(CKTreeNode *)parent
+                     previousNode:(CKTreeNode *)previousNode
                         scopeRoot:(CKComponentScopeRoot *)scopeRoot
+                     componentKey:(const CKTreeNodeComponentKey&)componentKey
                      stateUpdates:(const CKComponentStateUpdateMap &)stateUpdates
 {
-  auto const componentKey = [parent createParentKeyForComponentTypeName:component.typeName
-                                                             identifier:[component componentIdentifier]
-                                                                   keys:{}];
-
-  auto const previousNode = [previousParent childForComponentKey:componentKey];
-
-  // For Render Layout components, the component might have a scope handle already.
-  CKComponentScopeHandle *scopeHandle = component.scopeHandle;
-  if (scopeHandle == nil) {
-    scopeHandle = CKRender::ScopeHandle::Render::create(component, previousNode, scopeRoot, stateUpdates);
-  }
-
+  CKComponentScopeHandle *scopeHandle = CKRender::ScopeHandle::Render::create(component, previousNode, scopeRoot, stateUpdates);
   if (self = [self initWithPreviousNode:previousNode scopeHandle:scopeHandle]) {
-    _component = component;
-    _componentKey = componentKey;
-    // Set the link between the parent and the child.
-    [parent setChild:self forComponentKey:_componentKey];
-    // Register the node-parent link in the scope root (we use it to mark dirty branch on a state update).
-    scopeRoot.rootNode.registerNode(self, parent);
-    // Set the link between the tree node and the scope handle.
-    [scopeHandle setTreeNode:self];
+    [self linkComponent:component withKey:componentKey toParent:parent inScopeRoot:scopeRoot];
     // Update the treeNode on the component
     [component acquireTreeNode:self];
     // Finalize the node/scope registration.
@@ -110,24 +95,62 @@ namespace TreeNode {
   return self;
 }
 
-- (void)linkComponent:(id<CKTreeNodeComponentProtocol>)component
-             toParent:(id<CKTreeNodeWithChildrenProtocol>)parent
-       previousParent:(id<CKTreeNodeWithChildrenProtocol> _Nullable)previousParent
-               params:(const CKBuildComponentTreeParams &)params
+// Scope init
+- (instancetype)initWithOwner:(CKTreeNode *)owner
+                 previousNode:(CKTreeNode *)previousNode
+                    scopeRoot:(CKComponentScopeRoot *)scopeRoot
+                 componentKey:(const CKTreeNodeComponentKey&)componentKey
+          initialStateCreator:(id (^)(void))initialStateCreator
+                 stateUpdates:(const CKComponentStateUpdateMap &)stateUpdates
+          requiresScopeHandle:(BOOL)requiresScopeHandle
+{
+  RCAssertNotNil(owner, @"Must have an owner");
+
+  CKComponentScopeHandle *scopeHandle = _createScopeHandle(scopeRoot,
+                                                           previousNode,
+                                                           componentKey.componentTypeName,
+                                                           initialStateCreator,
+                                                           stateUpdates,
+                                                           requiresScopeHandle);
+
+  if (self = [self initWithPreviousNode:previousNode scopeHandle:scopeHandle]) {
+    _componentKey = componentKey;
+    [owner setChild:self forComponentKey:componentKey];
+  }
+
+  return self;
+}
+
++ (instancetype)rootNode
+{
+  return [super new];
+}
+
+- (void)linkComponent:(id<CKComponentProtocol>)component
+              withKey:(const CKTreeNodeComponentKey&)componentKey
+             toParent:(CKTreeNode *)parent
+          inScopeRoot:(CKComponentScopeRoot *)scopeRoot
+{
+  _component = component;
+  _componentKey = componentKey;
+
+  [parent setChild:self forComponentKey:componentKey];
+
+  scopeRoot.rootNode.registerNode(self, parent);
+}
+
+- (void)linkComponent:(id<CKComponentProtocol>)component
+             toParent:(CKTreeNode *)parent
+          inScopeRoot:(CKComponentScopeRoot *)scopeRoot
 {
   // The existing `_componentKey` that was created by the scope, is an owner based key;
   // hence, we extract the `unique identifer` and the `keys` vector from it and recreate a parent based key based on this information.
-  auto const componentKey = [parent createParentKeyForComponentTypeName:component.typeName
-                                                             identifier:std::get<2>(_componentKey)
-                                                                   keys:std::get<3>(_componentKey)];
-  _componentKey = componentKey;
+  auto const componentKey = [parent createKeyForComponentTypeName:component.typeName
+                                                       identifier:_componentKey.identifier
+                                                             keys:_componentKey.keys
+                                                             type:CKTreeNodeComponentKey::Type::parent];
 
-  // Set the link between the parent and the child.
-  [parent setChild:self forComponentKey:_componentKey];
-
-  _component = component;
-  // Register the node-parent link in the scope root (we use it to mark dirty branch on a state update).
-  params.scopeRoot.rootNode.registerNode(self, parent);
+  [self linkComponent:component withKey:componentKey toParent:parent inScopeRoot:scopeRoot];
 }
 
 - (id)state
@@ -140,10 +163,29 @@ namespace TreeNode {
   return _componentKey;
 }
 
-- (void)didReuseWithParent:(id<CKTreeNodeProtocol>)parent
+- (void)reusePreviousNode:(CKTreeNode *)node inScopeRoot:(CKComponentScopeRoot *)scopeRoot
+{
+  // Transfer the children vector from the reused node.
+   _children = node->_children;
+
+  for (auto const &child : _children) {
+    if (child.key.type() == CKTreeNodeComponentKey::Type::parent) {
+      [child.node didReuseWithParent:self inScopeRoot:scopeRoot];
+    }
+  }
+}
+
+
+- (void)didReuseWithParent:(CKTreeNode *)parent
                inScopeRoot:(CKComponentScopeRoot *)scopeRoot
 {
-  CKAssert(parent != nil, @"The parent cannot be nil; every node should have a valid parent.");
+  // In case that CKComponentScope was created, but not acquired from the component (for example: early nil return) ,
+  // the component was never linked to the scope handle/tree node, hence, we should stop the recursion here.
+  if (self.component == nil) {
+    return;
+  }
+
+  RCAssert(parent != nil, @"The parent cannot be nil; every node should have a valid parent.");
   scopeRoot.rootNode.registerNode(self, parent);
   if (_scopeHandle) {
     // Register the reused comopnent in the new scope root.
@@ -154,22 +196,187 @@ namespace TreeNode {
       [scopeRoot registerComponentController:controller];
     }
   }
+
+  for (auto const &child : _children) {
+    if (child.key.type() == CKTreeNodeComponentKey::Type::parent) {
+      [child.node didReuseWithParent:self inScopeRoot:scopeRoot];
+    }
+  }
 }
 
+- (std::vector<CKTreeNode *>)children
+{
+  std::vector<CKTreeNode *> children;
+  for (auto const &child : _children) {
+    if (child.key.type() == CKTreeNodeComponentKey::Type::parent) {
+      children.push_back(child.node);
+    }
+  }
+  return children;
+}
+
+- (size_t)childrenSize
+{
+  return _children.size();
+}
+
+- (CKTreeNode *)childForComponentKey:(const CKTreeNodeComponentKey &)key
+{
+  for (auto const &child : _children) {
+    if (child.key == key) {
+      return child.node;
+    }
+  }
+  return nil;
+}
+
+- (CKTreeNodeComponentKey)createKeyForComponentTypeName:(const char *)componentTypeName
+                                             identifier:(id<NSObject>)identifier
+                                                   keys:(const std::vector<id<NSObject>> &)keys
+                                                   type:(CKTreeNodeComponentKey::Type)type
+{
+  NSUInteger keyCounter = CKTreeNodeComponentKey::startOffsetForType(type);
+  for (auto const &child : _children) {
+    if (child.key.componentTypeName == componentTypeName && RCObjectIsEqual(child.key.identifier, identifier)) {
+      keyCounter += 2;
+    }
+  }
+
+  return CKTreeNodeComponentKey{componentTypeName, keyCounter, identifier, keys};
+}
+
+- (void)setChild:(CKTreeNode *)child forComponentKey:(const CKTreeNodeComponentKey &)componentKey
+{
+  _children.push_back(CKTreeNodeComponentKeyToNode{.key = componentKey, .node = child});
+}
+
+static CKComponentScopeHandle *_createScopeHandle(CKComponentScopeRoot *scopeRoot,
+                                                  CKTreeNode *previousNode,
+                                                  const char *componentTypeName,
+                                                  id (^initialStateCreator)(void),
+                                                  const CKComponentStateUpdateMap &stateUpdates,
+                                                  BOOL requiresScopeHandle) {
+  RCCAssertNotNil(initialStateCreator, @"Must have an initial state creator");
+
+  if (requiresScopeHandle == NO) {
+    RCCAssertNil(previousNode.scopeHandle, @"requiresScopeHandle is false but previous node has scope handle");
+    return nil;
+  }
+
+  if (previousNode != nil) {
+    RCCAssertNotNil(previousNode.scopeHandle, @"requiresScopeHandle is true but no scopeHandle on previous node");
+    return [previousNode.scopeHandle newHandleWithStateUpdates:stateUpdates];
+  } else {
+    return [[CKComponentScopeHandle alloc] initWithListener:scopeRoot.listener
+                                             rootIdentifier:scopeRoot.globalIdentifier
+                                          componentTypeName:componentTypeName
+                                               initialState:(initialStateCreator ? initialStateCreator() : nil)];
+  }
+}
+
++ (CKComponentScopePair)childPairForPair:(const CKComponentScopePair &)pair
+                                 newRoot:(CKComponentScopeRoot *)newRoot
+                       componentTypeName:(const char *)componentTypeName
+                              identifier:(id)identifier
+                                    keys:(const std::vector<id<NSObject>> &)keys
+                     initialStateCreator:(id (^)(void))initialStateCreator
+                            stateUpdates:(const CKComponentStateUpdateMap &)stateUpdates
+                     requiresScopeHandle:(BOOL)requiresScopeHandle
+{
+  CKTreeNodeComponentKey componentKey = [pair.node createKeyForComponentTypeName:componentTypeName
+                                                                      identifier:identifier
+                                                                            keys:keys
+                                                                            type:CKTreeNodeComponentKey::Type::owner];
+
+  const auto previousNode = [pair.previousNode childForComponentKey:componentKey];
+  const auto node = [[CKTreeNode alloc] initWithOwner:pair.node
+                                         previousNode:previousNode
+                                            scopeRoot:newRoot
+                                         componentKey:componentKey
+                                  initialStateCreator:initialStateCreator
+                                         stateUpdates:stateUpdates
+                                  requiresScopeHandle:requiresScopeHandle];
+
+  return CKComponentScopePair{.node = node, .previousNode = previousNode};
+}
+
++ (CKComponentScopePair)childPairForComponent:(id<CKRenderComponentProtocol>)component
+                                       parent:(CKTreeNode *)parent
+                               previousParent:(CKTreeNode *)previousParent
+                                     scopeRoot:(CKComponentScopeRoot *)scopeRoot
+                                  stateUpdates:(const CKComponentStateUpdateMap &)stateUpdates
+{
+  auto const componentKey = [parent createKeyForComponentTypeName:component.typeName
+                                                       identifier:component.componentIdentifier
+                                                             keys:{}
+                                                             type:CKTreeNodeComponentKey::Type::parent];
+  auto const previousNode = [previousParent childForComponentKey:componentKey];
+  const auto node = [[CKTreeNode alloc] initWithComponent:component
+                                                   parent:parent
+                                             previousNode:previousNode
+                                               scopeRoot:scopeRoot
+                                             componentKey:componentKey
+                                             stateUpdates:stateUpdates];
+  return CKComponentScopePair{.node = node, .previousNode = previousNode};
+}
+
+#pragma mark - Helpers
+
 #if DEBUG
+// Iterate threw the nodes according to the **parent** based key
+- (NSArray<NSString *> *)debugDescriptionNodes
+{
+  NSString *const selfDescription = [NSString stringWithFormat:@"- %s %d - %@",
+                                     _component.typeName,
+                                     _nodeIdentifier,
+                                     self];
+  NSMutableArray<NSString *> *debugDescriptionNodes = [NSMutableArray arrayWithArray:@[selfDescription]];
+  for (auto const &child : _children) {
+    if (child.key.type() == CKTreeNodeComponentKey::Type::parent) {
+      for (NSString *s in [child.node debugDescriptionNodes]) {
+        [debugDescriptionNodes addObject:[@"  " stringByAppendingString:s]];
+      }
+    }
+  }
+  return debugDescriptionNodes;
+}
+
+// Iterate threw the nodes according to the **owner** based key
+- (NSArray<NSString *> *)debugDescriptionComponents
+{
+  NSMutableArray<NSString *> *childrenDebugDescriptions = [NSMutableArray new];
+  for (auto const &child : _children) {
+    if (child.key.type() == CKTreeNodeComponentKey::Type::owner) {
+      auto const description = [NSString stringWithFormat:@"- %s%@%@",
+                                child.key.componentTypeName,
+                                (child.key.identifier
+                                 ? [NSString stringWithFormat:@":%@", child.key.identifier]
+                                 : @""),
+                                child.key.keys.empty() ? @"" : formatKeys(child.key.keys)];
+      [childrenDebugDescriptions addObject:description];
+      for (NSString *s in [child.node debugDescriptionComponents]) {
+        [childrenDebugDescriptions addObject:[@"  " stringByAppendingString:s]];
+      }
+    }
+  }
+  return childrenDebugDescriptions;
+}
+
+static NSString *formatKeys(const std::vector<id<NSObject>> &keys)
+{
+  NSMutableArray<NSString *> *a = [NSMutableArray new];
+  for (auto key : keys) {
+    [a addObject:[key description] ?: @"(null)"];
+  }
+  return [a componentsJoinedByString:@", "];
+}
+
 /** Returns a multi-line string describing this node and its children nodes */
 - (NSString *)debugDescription
 {
   return [[self debugDescriptionNodes] componentsJoinedByString:@"\n"];
 }
 
-- (NSArray<NSString *> *)debugDescriptionNodes
-{
-  return @[[NSString stringWithFormat:@"- %s %d - %@",
-            _component.typeName,
-            _nodeIdentifier,
-            self]];
-}
 #endif
 
 @end

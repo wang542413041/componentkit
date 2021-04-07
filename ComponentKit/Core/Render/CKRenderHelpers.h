@@ -20,9 +20,6 @@
 
 @protocol CKRenderWithChildComponentProtocol;
 
-@class CKRenderComponent;
-@class CKTreeNodeWithChild;
-
 using CKRenderDidReuseComponentBlock = void(^)(id<CKRenderComponentProtocol>);
 
 namespace CKRender {
@@ -30,7 +27,7 @@ namespace CKRender {
 
     namespace Iterable {
     /**
-     Build component tree for a `CKTreeNodeComponentProtocol` component.
+     Build component tree for a `CKComponentProtocol` component.
      This should be called when a component, on initialization, receives its child component from the outside and it's not meant to be converted to a render component.
 
      @param component The component at the head of the component tree.
@@ -39,9 +36,9 @@ namespace CKRender {
      @param params Collection of parameters to use to properly setup build component tree step.
      @param parentHasStateUpdate Flag used to run optimizations at component tree build time. `YES` if the input parent received a state update.
      */
-      auto build(id<CKTreeNodeComponentProtocol> component,
-                 id<CKTreeNodeWithChildrenProtocol> parent,
-                 id<CKTreeNodeWithChildrenProtocol> previousParent,
+      auto build(id<CKComponentProtocol> component,
+                 CKTreeNode *parent,
+                 CKTreeNode *previousParent,
                  const CKBuildComponentTreeParams &params,
                  BOOL parentHasStateUpdate) -> void;
   }
@@ -59,12 +56,12 @@ namespace CKRender {
        @param didReuseBlock Will be called in case that the component from the previous generation has been reused.
        */
       auto build(id<CKRenderWithChildComponentProtocol> component,
-                 __strong id<CKTreeNodeComponentProtocol> *childComponent,
-                 id<CKTreeNodeWithChildrenProtocol> parent,
-                 id<CKTreeNodeWithChildrenProtocol> previousParent,
+                 __strong id<CKComponentProtocol> *childComponent,
+                 CKTreeNode *parent,
+                 CKTreeNode *previousParent,
                  const CKBuildComponentTreeParams &params,
                  BOOL parentHasStateUpdate,
-                 CKRenderDidReuseComponentBlock didReuseBlock = nil) -> id<CKTreeNodeProtocol>;
+                 CKRenderDidReuseComponentBlock didReuseBlock = nil) -> CKTreeNode *;
     }
 
     namespace Root {
@@ -74,7 +71,7 @@ namespace CKRender {
       @param component The root component of the tree.
       @param params Collection of parameters to use to properly setup build component tree step.
       */
-      auto build(id<CKTreeNodeComponentProtocol> component, const CKBuildComponentTreeParams &params) -> void;
+      auto build(id<CKComponentProtocol> component, const CKBuildComponentTreeParams &params) -> void;
     }
   }
 
@@ -88,7 +85,7 @@ namespace CKRender {
        @param stateUpdates The state updates map of this component generation.
        */
       auto create(id<CKRenderComponentProtocol> component,
-                  id<CKTreeNodeProtocol> previousNode,
+                  CKTreeNode *previousNode,
                   CKComponentScopeRoot *scopeRoot,
                   const CKComponentStateUpdateMap &stateUpdates) -> CKComponentScopeHandle*;
     }
@@ -97,16 +94,10 @@ namespace CKRender {
   /**
    @return `YES` if the component of the node has a state update, `NO` otherwise.
    */
-  auto componentHasStateUpdate(__unsafe_unretained CKComponentScopeHandle *scopeHandle,
+  auto componentHasStateUpdate(__unsafe_unretained CKTreeNode *node,
                                __unsafe_unretained id previousParent,
                                CKBuildTrigger buildTrigger,
                                const CKComponentStateUpdateMap& stateUpdates) -> BOOL;
-  /**
-   @return `YES` if the component of the node has a state update, `NO` otherwise.
-   */
-  auto nodeHasStateUpdate(__unsafe_unretained id<CKTreeNodeProtocol> node,
-                          __unsafe_unretained id<CKTreeNodeWithChildrenProtocol> previousParent,
-                          const CKBuildComponentTreeParams &params) -> BOOL;
 
   /**
    Mark all the dirty nodes, on a path from an existing node up to the root node in the passed CKTreeNodeDirtyIds set.

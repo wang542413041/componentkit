@@ -12,14 +12,17 @@
 
 #import <ComponentKit/CKInternalHelpers.h>
 #import <ComponentKit/CKMutex.h>
+#import <RenderCoreLayoutCaching/RCComputeRootLayout.h>
 
 #import "CKComponentInternal.h"
 #import "CKComponentCreationValidation.h"
 #import "CKComponentSubclass.h"
+#import "CKComponent+LayoutLifecycle.h"
 #import "CKThreadLocalComponentScope.h"
 #import "CKIterableHelpers.h"
 #import "CKRenderHelpers.h"
 #import "CKTreeNode.h"
+#import "ComponentLayoutContext.h"
 
 @implementation CKRenderComponent
 {
@@ -30,11 +33,11 @@
 + (void)initialize
 {
   if (self != [CKRenderComponent class]) {
-    CKAssert(!CKSubclassOverridesInstanceMethod([CKRenderComponent class], self, @selector(computeLayoutThatFits:)),
+    RCAssert(!CKSubclassOverridesInstanceMethod([CKRenderComponent class], self, @selector(computeLayoutThatFits:)),
              @"%@ overrides -computeLayoutThatFits: which is not allowed. "
              "Consider subclassing CKLayoutComponent directly if you need to perform custom layout.",
              self);
-    CKAssert(!CKSubclassOverridesInstanceMethod([CKRenderComponent class], self, @selector(layoutThatFits:parentSize:)),
+    RCAssert(!CKSubclassOverridesInstanceMethod([CKRenderComponent class], self, @selector(layoutThatFits:parentSize:)),
              @"%@ overrides -layoutThatFits:parentSize: which is not allowed. "
              "Consider subclassing CKLayoutComponent directly if you need to perform custom layout.",
              self);
@@ -52,7 +55,7 @@
 
 - (CKComponent *)render:(id)state
 {
-  CKFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
+  RCFailAssert(@"%@ MUST override the '%@' method.", self.className, NSStringFromSelector(_cmd));
   return nil;
 }
 
@@ -62,8 +65,8 @@
   return [super viewForAnimation] ?: [_child viewForAnimation];
 }
 
-- (void)buildComponentTree:(id<CKTreeNodeWithChildrenProtocol>)parent
-            previousParent:(id<CKTreeNodeWithChildrenProtocol> _Nullable)previousParent
+- (void)buildComponentTree:(CKTreeNode *)parent
+            previousParent:(CKTreeNode *_Nullable)previousParent
                     params:(const CKBuildComponentTreeParams &)params
       parentHasStateUpdate:(BOOL)parentHasStateUpdate
 {
@@ -75,19 +78,37 @@
   }
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                          restrictedToSize:(const CKComponentSize &)size
-                      relativeToParentSize:(CGSize)parentSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                 restrictedToSize:(const RCComponentSize &)size
+             relativeToParentSize:(CGSize)parentSize
 {
-  CKAssert(size == CKComponentSize(),
+  RCAssert(size == RCComponentSize(),
            @"CKRenderComponent only passes size {} to the super class initializer, but received size %@ "
            "(component=%@)", size.description(), _child);
-
+  
   if (_child) {
-    CKLayout l = [_child layoutThatFits:constrainedSize parentSize:parentSize];
+    RCLayout l;
+    if (CKReadGlobalConfig().enableLayoutCaching) {
+#if CK_ASSERTIONS_ENABLED
+      const CKComponentContext<CKComponentCreationValidationContext> validationContext([[CKComponentCreationValidationContext alloc] initWithSource:CKComponentCreationValidationSourceLayout]);
+#endif
+      CK::Component::LayoutContext context(self, constrainedSize);
+      auto const systraceListener = context.systraceListener;
+      CKComponentWillLayout(_child, constrainedSize, parentSize, systraceListener);
+      l = RCFetchOrComputeLayout(_child, constrainedSize, parentSize, &computeLayoutForModel);
+      CKComponentDidLayout(_child, l, constrainedSize, parentSize, systraceListener);
+    } else {
+      l = [_child layoutThatFits:constrainedSize parentSize:parentSize];
+    }
     return {self, l.size, {{{0,0}, l}}};
   }
   return [super computeLayoutThatFits:constrainedSize restrictedToSize:size relativeToParentSize:parentSize];
+}
+
+static RCLayout computeLayoutForModel(id<CKMountable> model, const CKSizeRange &constrainedSize, CGSize parentSize)
+{
+  const auto component = (CKComponent *)model;
+  return [component computeLayoutThatFits:constrainedSize restrictedToSize:component.size relativeToParentSize:parentSize];
 }
 
 - (CKComponent *)child
@@ -97,12 +118,12 @@
 
 - (unsigned int)numberOfChildren
 {
-  return CKIterable::numberOfChildren(_child);
+  return RCIterable::numberOfChildren(_child);
 }
 
 - (id<CKMountable>)childAtIndex:(unsigned int)index
 {
-  return CKIterable::childAtIndex(self, index, _child);
+  return RCIterable::childAtIndex(self, index, _child);
 }
 
 + (id)initialState
@@ -139,24 +160,24 @@
   if ([self.class controllerClass] != nil) {
     return YES;
   }
-
+  
   const Class componentClass = self.class;
-
+  
   static CK::StaticMutex mutex = CK_MUTEX_INITIALIZER; // protects cache
   CK::StaticMutexLocker l(mutex);
-
+  
   static std::unordered_map<Class, BOOL> *cache = new std::unordered_map<Class, BOOL>();
   auto it = cache->find(componentClass);
   if (it == cache->end()) {
     const BOOL requiresScopeHandle =
-      CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(buildController)) ||
-      CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(animationsFromPreviousComponent:)) ||
-      CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(animationsOnInitialMount)) ||
-      CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(animationsOnFinalUnmount));
+    CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(buildController)) ||
+    CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(animationsFromPreviousComponent:)) ||
+    CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(animationsOnInitialMount)) ||
+    CKSubclassOverridesInstanceMethod([CKRenderComponent class], componentClass, @selector(animationsOnFinalUnmount));
     it = cache->insert({componentClass, requiresScopeHandle}).first;
   }
   const BOOL requiresScopeHandle = it->second;
-  CKAssert(requiresScopeHandle ||
+  RCAssert(requiresScopeHandle ||
            (!self.hasAnimations && !self.hasInitialMountAnimations && !self.hasFinalUnmountAnimations),
            @"%@ changes the default logic of -has*Animations properties; Make sure to override -requiresScopeHandle "
            "and return YES when animations are present.",

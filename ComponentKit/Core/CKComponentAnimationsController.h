@@ -35,7 +35,7 @@ namespace CK {
     }
   };
 
-  using PendingAnimationsByComponentMap = std::unordered_map<CKComponent *, std::vector<CKPendingComponentAnimation>, CK::hash<CKComponent *>, CK::is_equal<CKComponent *>>;
+  using PendingAnimationsByComponentMap = std::unordered_map<CKComponent *, std::vector<CKPendingComponentAnimation>, RC::hash<CKComponent *>, RC::is_equal<CKComponent *>>;
 
   struct PendingAnimations final {
     PendingAnimations(PendingAnimationsByComponentMap animationsOnInitialMount,
@@ -78,10 +78,10 @@ namespace CK {
                              transactionProvider);
     }
 
-    void cleanupAppliedAnimationsForComponent(CKComponent *const c);
+    void cleanupAppliedAnimationsForComponent(CKComponent *const c) noexcept;
 
   private:
-    using AppliedAnimationsByComponentMap = std::unordered_map<CKComponent *, CKAppliedComponentAnimationMap, CK::hash<CKComponent *>, CK::is_equal<CKComponent *>>;
+    using AppliedAnimationsByComponentMap = std::unordered_map<CKComponent *, CKAppliedComponentAnimationMap, RC::hash<CKComponent *>, RC::is_equal<CKComponent *>>;
 
     template <typename TransactionProvider>
     auto applyPendingAnimations(const PendingAnimationsByComponentMap &pendingAnimations,
@@ -129,7 +129,7 @@ namespace CK {
     }
 
     static auto cleanupAppliedAnimationsForComponent(AppliedAnimationsByComponentMap &aas,
-                                                     CKComponent *const c);
+                                                     CKComponent *const c) noexcept;
 
     // Ownership will be shared with transaction completions which can outlive the controller
     std::shared_ptr<AppliedAnimationsByComponentMap> _appliedAnimationsOnInitialMount;

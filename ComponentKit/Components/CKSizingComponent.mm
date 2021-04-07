@@ -12,21 +12,21 @@
 
 #import <ComponentKit/CKComponentSubclass.h>
 
-#import "CKComponentSize_SwiftBridge+Internal.h"
+#import "RCComponentSize_SwiftBridge+Internal.h"
 
 @implementation CKSizingComponent {
   CKComponent *_component;
-  CKComponentSize _size;
+  RCComponentSize _size;
 }
 
-- (instancetype)initWithSwiftSize:(CKComponentSize_SwiftBridge *)swiftSize
+- (instancetype)initWithSwiftSize:(RCComponentSize_SwiftBridge *)swiftSize
                         component:(CKComponent *)component
 {
-  const auto size = swiftSize != nil ? swiftSize.componentSize : CKComponentSize{};
+  const auto size = swiftSize != nil ? swiftSize.componentSize : RCComponentSize{};
   return [self initWithSize:size component:component];
 }
 
-- (instancetype _Nullable)initWithSize:(const CKComponentSize &)size
+- (instancetype _Nullable)initWithSize:(const RCComponentSize &)size
                              component:(CKComponent *)component
 {
   if (self = [super initWithView:{} size:size]) {
@@ -38,16 +38,16 @@
 
 - (unsigned int)numberOfChildren
 {
-  return CKIterable::numberOfChildren(_component);
+  return RCIterable::numberOfChildren(_component);
 }
 
 - (id<CKMountable>)childAtIndex:(unsigned int)index
 {
-  return CKIterable::childAtIndex(self, index, _component);
+  return RCIterable::childAtIndex(self, index, _component);
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
-                 restrictedToSize:(const CKComponentSize &)size
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+                 restrictedToSize:(const RCComponentSize &)size
              relativeToParentSize:(CGSize)parentSize
 {
   const auto resolvedRange = constrainedSize.intersect(_size.resolve(parentSize));

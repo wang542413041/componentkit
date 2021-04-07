@@ -12,7 +12,7 @@
 
 #import <array>
 
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 #import <ComponentKit/CKInternalHelpers.h>
 
 #import "CKComponentSubclass.h"
@@ -25,10 +25,10 @@ struct CKStateConfiguration {
 
   bool operator==(const CKStateConfiguration &other) const
   {
-    return CKObjectIsEqual(title, other.title)
-    && CKObjectIsEqual(titleColor, other.titleColor)
-    && CKObjectIsEqual(image, other.image)
-    && CKObjectIsEqual(backgroundImage, other.backgroundImage);
+    return RCObjectIsEqual(title, other.title)
+    && RCObjectIsEqual(titleColor, other.titleColor)
+    && RCObjectIsEqual(image, other.image)
+    && RCObjectIsEqual(backgroundImage, other.backgroundImage);
   }
 };
 
@@ -97,16 +97,16 @@ typedef std::array<CKStateConfiguration, 8> CKStateConfigurationArray;
       enumerateAllStates(^(UIControlState state) {
         const CKStateConfiguration &oldStateConfig = oldConfig->_configurations[indexForState(state)];
         const CKStateConfiguration &newStateConfig = newConfig->_configurations[indexForState(state)];
-        if (!CKObjectIsEqual(oldStateConfig.title, newStateConfig.title)) {
+        if (!RCObjectIsEqual(oldStateConfig.title, newStateConfig.title)) {
           [view setTitle:newStateConfig.title forState:state];
         }
-        if (!CKObjectIsEqual(oldStateConfig.titleColor, newStateConfig.titleColor)) {
+        if (!RCObjectIsEqual(oldStateConfig.titleColor, newStateConfig.titleColor)) {
           [view setTitleColor:newStateConfig.titleColor forState:state];
         }
-        if (!CKObjectIsEqual(oldStateConfig.image, newStateConfig.image)) {
+        if (!RCObjectIsEqual(oldStateConfig.image, newStateConfig.image)) {
           [view setImage:newStateConfig.image forState:state];
         }
-        if (!CKObjectIsEqual(oldStateConfig.backgroundImage, newStateConfig.backgroundImage)) {
+        if (!RCObjectIsEqual(oldStateConfig.backgroundImage, newStateConfig.backgroundImage)) {
           [view setBackgroundImage:newStateConfig.backgroundImage forState:state];
         }
       });
@@ -147,7 +147,7 @@ typedef std::array<CKStateConfiguration, 8> CKStateConfigurationArray;
     CKComponentActionAttribute(action, UIControlEventTouchUpInside),
   });
 
-  CKAccessibilityContext accessibilityContext(options.accessibilityContext);
+  RCAccessibilityContext accessibilityContext(options.accessibilityContext);
   if (!accessibilityContext.extra[CKAccessibilityExtraActionKey]) {
     NSMutableDictionary *extra = [accessibilityContext.extra mutableCopy] ?: [NSMutableDictionary new];
     extra[CKAccessibilityExtraActionKey] = CKAccessibilityExtraActionValue(CKAction<>::demotedFrom(action, static_cast<UIEvent*>(nil)));
@@ -181,7 +181,7 @@ typedef std::array<CKStateConfiguration, 8> CKStateConfigurationArray;
   return self;
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   return {self, constrainedSize.clamp(_intrinsicSize)};
 }
@@ -234,7 +234,7 @@ static CGSize intrinsicSize(NSString *title, NSInteger numberOfLines, UIFont *ti
   UIFont *const font = titleFont ?: [UIFont systemFontOfSize:[UIFont labelFontSize]];
   const CGSize titleSize = [title sizeWithAttributes:@{NSFontAttributeName: font}];
 
-  CKCWarn(numberOfLines > 0, @"Setting numberOfLines to 0 or less can create unpredictible behaviour between displaying the label and the buttons size. UIButton's titleLabel property isn't bound to the bounds of it's housing UIButton, which can lead to the text displaying incorrectly.");
+  RCCWarn(numberOfLines > 0, @"Setting numberOfLines to 0 or less can create unpredictible behaviour between displaying the label and the buttons size. UIButton's titleLabel property isn't bound to the bounds of it's housing UIButton, which can lead to the text displaying incorrectly.");
 
   const CGFloat labelHeight = (numberOfLines > 1)
                             ? ceilf(font.lineHeight) * CGFloat(numberOfLines)

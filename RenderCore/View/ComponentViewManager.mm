@@ -13,8 +13,8 @@
 #import <objc/runtime.h>
 #import <unordered_map>
 
-#import <RenderCore/CKAssert.h>
-#import <RenderCore/CKAssociatedObject.h>
+#import <RenderCore/RCAssert.h>
+#import <RenderCore/RCAssociatedObject.h>
 #import <RenderCore/CKGlobalConfig.h>
 #import <RenderCore/CKMutex.h>
 #import <RenderCore/ComponentViewReuseUtilities.h>
@@ -65,7 +65,7 @@ namespace std {
   };
 }
 
-int32_t PersistentAttributeShape::computeIdentifier(const CKViewComponentAttributeValueMap &attributes)
+int32_t PersistentAttributeShape::computeIdentifier(const CKViewComponentAttributeValueMap &attributes) noexcept
 {
   CK::Component::PersistentAttributeShapeKey key;
   for (const auto &it : attributes) {
@@ -81,7 +81,7 @@ int32_t PersistentAttributeShape::computeIdentifier(const CKViewComponentAttribu
   static int32_t nextIdentifier = 0;
   const auto it = identifierMap->find(key);
   if (it == identifierMap->end()) {
-    // We don't need fancy OSAtomicIncrement64 here because we're already under the StaticMutex (for identifierMap).
+    // We don't need fancy atomic here because we're already under the StaticMutex (for identifierMap).
     int32_t identifier = nextIdentifier++;
     identifierMap->emplace(std::move(key), identifier);
     return identifier;
@@ -116,11 +116,11 @@ int32_t PersistentAttributeShape::computeIdentifier(const CKViewComponentAttribu
 }
 @end
 
-UIView *ViewReusePool::viewForClass(const CKComponentViewClass &viewClass, UIView *container, CK::Component::MountAnalyticsContext *mountAnalyticsContext)
+UIView *ViewReusePool::viewForClass(const CKComponentViewClass &viewClass, UIView *container, CK::Component::MountAnalyticsContext *mountAnalyticsContext) noexcept
 {
   if (position == pool.end()) {
     UIView *v = viewClass.createView();
-    CKCAssertNotNil(v, @"Expected non-nil view to be created for view class %s", viewClass.getIdentifier().description().c_str());
+    RCCAssertNotNil(v, @"Expected non-nil view to be created for view class %s", viewClass.getIdentifier().description().c_str());
     [container addSubview:v];
     pool.push_back(v);
     position = pool.end();
@@ -137,7 +137,7 @@ UIView *ViewReusePool::viewForClass(const CKComponentViewClass &viewClass, UIVie
   }
 }
 
-void ViewReusePool::reset(CK::Component::MountAnalyticsContext *mountAnalyticsContext)
+void ViewReusePool::reset(CK::Component::MountAnalyticsContext *mountAnalyticsContext) noexcept
 {
   for (auto it = pool.begin(); it != position; ++it) {
     ViewReuseUtilities::willUnhide(*it, mountAnalyticsContext);
@@ -153,9 +153,9 @@ void ViewReusePool::reset(CK::Component::MountAnalyticsContext *mountAnalyticsCo
 
 const char kComponentViewReusePoolMapAssociatedObjectKey = ' ';
 
-void ViewReusePool::hideAll(UIView *view, MountAnalyticsContext *mountAnalyticsContext)
+void ViewReusePool::hideAll(UIView *view, MountAnalyticsContext *mountAnalyticsContext) noexcept
 {
-  CKComponentViewReusePoolMapWrapper *wrapper = CKGetAssociatedObject_MainThreadAffined(view, &kComponentViewReusePoolMapAssociatedObjectKey);
+  CKComponentViewReusePoolMapWrapper *wrapper = RCGetAssociatedObject_MainThreadAffined(view, &kComponentViewReusePoolMapAssociatedObjectKey);
   if (!wrapper) {
     return;
   }
@@ -172,17 +172,17 @@ void ViewReusePool::hideAll(UIView *view, MountAnalyticsContext *mountAnalyticsC
 
 ViewReusePoolMap::ViewReusePoolMap() {}
 
-ViewReusePoolMap &ViewReusePoolMap::viewReusePoolMapForView(UIView *v)
+ViewReusePoolMap &ViewReusePoolMap::viewReusePoolMapForView(UIView *v) noexcept
 {
-  CKComponentViewReusePoolMapWrapper *wrapper = CKGetAssociatedObject_MainThreadAffined(v, &kComponentViewReusePoolMapAssociatedObjectKey);
+  CKComponentViewReusePoolMapWrapper *wrapper = RCGetAssociatedObject_MainThreadAffined(v, &kComponentViewReusePoolMapAssociatedObjectKey);
   if (!wrapper) {
     wrapper = [[CKComponentViewReusePoolMapWrapper alloc] init];
-    CKSetAssociatedObject_MainThreadAffined(v, &kComponentViewReusePoolMapAssociatedObjectKey, wrapper);
+    RCSetAssociatedObject_MainThreadAffined(v, &kComponentViewReusePoolMapAssociatedObjectKey, wrapper);
   }
   return wrapper->_viewReusePoolMap;
 }
 
-void ViewReusePoolMap::reset(UIView *container, CK::Component::MountAnalyticsContext *mountAnalyticsContext)
+void ViewReusePoolMap::reset(UIView *container, CK::Component::MountAnalyticsContext *mountAnalyticsContext) noexcept
 {
   for (auto &it : dictionary) {
     it.second.reset(mountAnalyticsContext);
@@ -214,7 +214,7 @@ void ViewReusePoolMap::reset(UIView *container, CK::Component::MountAnalyticsCon
         [subviews exchangeObjectAtIndex:i withObjectAtIndex:swapIndex];
         [container exchangeSubviewAtIndex:i withSubviewAtIndex:swapIndex];
       }
-      CKCAssertWithCategory(swapIndex != NSNotFound,
+      RCCAssertWithCategory(swapIndex != NSNotFound,
                             [CKMountedObjectForView(*nextVendedViewIt) class],
                             @"Expected to find subview %@ (mounted object: %@) in %@ (mounted object: %@)",
                             [*nextVendedViewIt class],
@@ -233,28 +233,28 @@ static char kPersistentAttributesViewKey = ' ';
 
 static CKComponentAttributeSetWrapper *attributeSetWrapperForView(UIView *view)
 {
-  CKComponentAttributeSetWrapper *wrapper = CKGetAssociatedObject_MainThreadAffined(view, &kPersistentAttributesViewKey);
+  CKComponentAttributeSetWrapper *wrapper = RCGetAssociatedObject_MainThreadAffined(view, &kPersistentAttributesViewKey);
   if (wrapper == nil) {
     wrapper = [[CKComponentAttributeSetWrapper alloc] init];
-    CKSetAssociatedObject_MainThreadAffined(view,
+    RCSetAssociatedObject_MainThreadAffined(view,
                                             &kPersistentAttributesViewKey,
                                             wrapper);
   }
   return wrapper;
 }
 
-void AttributeApplicator::applyAttributes(UIView *view, std::shared_ptr<const CKViewComponentAttributeValueMap> attributes)
+void AttributeApplicator::applyAttributes(UIView *view, std::shared_ptr<const CKViewComponentAttributeValueMap> attributes) noexcept
 {
   CK::Component::ActionDisabler actionDisabler; // We never want implicit animations when applying attributes
 
   // Avoid the static destructor fiasco, use a pointer:
   static const auto *empty = new CKViewComponentAttributeValueMap();
-  
+
   CKComponentAttributeSetWrapper *const wrapper = attributeSetWrapperForView(view);
 
   const bool useNewStyleOptimisticMutations = CKReadGlobalConfig().useNewStyleOptimisticMutations;
   const bool hasNewStyleOptimisticViewMutations = useNewStyleOptimisticMutations && !wrapper->_optimisticViewMutations.empty();
-  
+
   if (!useNewStyleOptimisticMutations) {
     // Reset optimistic mutations so that applicators see they see the state they expect.
     if (!wrapper->_optimisticViewMutationTeardowns_Old.empty()) {
@@ -284,7 +284,7 @@ void AttributeApplicator::applyAttributes(UIView *view, std::shared_ptr<const CK
       if (newAttr == newAttributes.end()) {
         // There is no new attribute, so we always must call "unapplicator".
         oldAttr.first.unapplicator(view, oldAttr.second);
-      } else if (!CKObjectIsEqual(newAttr->second, oldAttr.second)) {
+      } else if (!RCObjectIsEqual(newAttr->second, oldAttr.second)) {
         // If the attribute has an updater, don't call the unapplicator; instead, the updater will be called below.
         if (newAttr->first.updater == nil) {
           oldAttr.first.unapplicator(view, oldAttr.second);
@@ -299,7 +299,7 @@ void AttributeApplicator::applyAttributes(UIView *view, std::shared_ptr<const CK
     if (oldAttr == oldAttributes.end()) {
       // There is no old attribute, so we always must call "applicator".
       newAttr.first.applicator(view, newAttr.second);
-    } else if (!CKObjectIsEqual(oldAttr->second, newAttr.second)) {
+    } else if (!RCObjectIsEqual(oldAttr->second, newAttr.second)) {
       // If the attribute has an "updater", call that. Otherwise, call the applicator.
       if (newAttr.first.updater) {
         newAttr.first.updater(view, oldAttr->second, newAttr.second);
@@ -308,32 +308,32 @@ void AttributeApplicator::applyAttributes(UIView *view, std::shared_ptr<const CK
       }
     }
   }
-  
+
   if (hasNewStyleOptimisticViewMutations) {
     auto copiedOptimisticMutations = wrapper->_optimisticViewMutations;
-    
+
     wrapper->_suppressApply = true;
-    
+
     for (auto optimisticMutation : copiedOptimisticMutations) {
       optimisticMutation.load(view);
     }
-    
+
     wrapper->_suppressApply = false;
-    
+
     if (copiedOptimisticMutations.size() != wrapper->_optimisticViewMutations.size()) {
       copiedOptimisticMutations = wrapper->_optimisticViewMutations;
     }
-    
+
     for (auto optimisticMutation : copiedOptimisticMutations) {
       optimisticMutation.apply(view);
     }
   }
-  
+
   // Update the wrapper to reference the new attributes. Don't do this before now since it changes oldAttributes.
   wrapper->_attributes = std::move(attributes);
 }
 
-void AttributeApplicator::addOptimisticViewMutationTeardown_Old(UIView *view, CKOptimisticViewMutationTeardown teardown)
+void AttributeApplicator::addOptimisticViewMutationTeardown_Old(UIView *view, CKOptimisticViewMutationTeardown teardown) noexcept
 {
   // We must tear down the mutations in the *reverse* order in which they were applied,
   // or we could end up restoring the wrong value.
@@ -341,50 +341,50 @@ void AttributeApplicator::addOptimisticViewMutationTeardown_Old(UIView *view, CK
   wrapper->_optimisticViewMutationTeardowns_Old.insert(wrapper->_optimisticViewMutationTeardowns_Old.begin(), teardown);
 }
 
-CKOptimisticMutationToken AttributeApplicator::addOptimisticViewMutation(UIView *view, CKOptimisticViewMutationOperation undo, CKOptimisticViewMutationOperation apply, CKOptimisticViewMutationOperation load)
+CKOptimisticMutationToken AttributeApplicator::addOptimisticViewMutation(UIView *view, CKOptimisticViewMutationOperation undo, CKOptimisticViewMutationOperation apply, CKOptimisticViewMutationOperation load) noexcept
 {
   CKComponentAttributeSetWrapper *const wrapper = attributeSetWrapperForView(view);
-  
+
   for (auto it = wrapper->_optimisticViewMutations.rbegin(); it != wrapper->_optimisticViewMutations.rend(); ++it) {
     if (it->undo) {
       it->undo(view);
     }
   }
-  
+
   load(view);
-  
+
   auto token = [[CKOptimisticViewMutationTokenWrapper alloc] init];
   token->_serial = wrapper->_tokenSerial++;
   token->_view = view;
-  
+
   wrapper->_optimisticViewMutations.push_back({ .serial = token->_serial, .undo = undo, .apply = apply, .load = load });
-  
+
   for (auto optimisticMutation : wrapper->_optimisticViewMutations) {
     optimisticMutation.apply(view);
   }
-  
+
   return token;
 }
 
-void AttributeApplicator::removeOptimisticViewMutation(CKOptimisticMutationToken token)
+void AttributeApplicator::removeOptimisticViewMutation(CKOptimisticMutationToken token) noexcept
 {
   if (token == CKOptimisticMutationTokenNull) {
     return;
   }
-  
+
   UIView *view = ((CKOptimisticViewMutationTokenWrapper *)token)->_view;
-  
+
   if (view == nullptr) {
     return;
   }
-  
+
   CKComponentAttributeSetWrapper *const wrapper = attributeSetWrapperForView(view);
-  
+
   if (wrapper->_tokenSerialBaseline > ((CKOptimisticViewMutationTokenWrapper *)token)->_serial) {
     // Token no longer valid or relevant because the associated view recycled
     return;
   }
-  
+
   for (auto it = wrapper->_optimisticViewMutations.begin(); it != wrapper->_optimisticViewMutations.end(); ++it) {
     if (it->serial == ((CKOptimisticViewMutationTokenWrapper *)token)->_serial) {
       if (wrapper->_optimisticViewMutations.size() == 1) {
@@ -396,7 +396,7 @@ void AttributeApplicator::removeOptimisticViewMutation(CKOptimisticMutationToken
       break;
     }
   }
-  
+
   if (!wrapper->_suppressApply) {
     for (auto optimisticMutation : wrapper->_optimisticViewMutations) {
       optimisticMutation.apply(view);
@@ -404,10 +404,10 @@ void AttributeApplicator::removeOptimisticViewMutation(CKOptimisticMutationToken
   }
 }
 
-void AttributeApplicator::resetOptimisticViewMutations(UIView *view)
+void AttributeApplicator::resetOptimisticViewMutations(UIView *view) noexcept
 {
   CKComponentAttributeSetWrapper *const wrapper = attributeSetWrapperForView(view);
-  
+
   if (wrapper->_tokenSerial > 0) {
     for (auto it = wrapper->_optimisticViewMutations .rbegin(); it != wrapper->_optimisticViewMutations.rend(); ++it) {
       if (it->undo) {

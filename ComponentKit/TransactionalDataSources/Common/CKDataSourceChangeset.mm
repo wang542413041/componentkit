@@ -13,9 +13,9 @@
 #import <UIKit/UICollectionView.h>
 #import <UIKit/UITableView.h>
 
-#import <ComponentKit/CKEqualityHelpers.h>
+#import <ComponentKit/RCEqualityHelpers.h>
 #import <ComponentKit/CKMacros.h>
-#import <ComponentKit/CKAssert.h>
+#import <RenderCore/RCAssert.h>
 
 #import "CKIndexSetDescription.h"
 
@@ -85,7 +85,7 @@
     [_removedSections isEqualToIndexSet:obj.removedSections] &&
     [_movedItems isEqualToDictionary:obj.movedItems] &&
     [_insertedSections isEqualToIndexSet:obj.insertedSections] &&
-    [_insertedItems isEqual:obj.insertedItems];
+    [_insertedItems isEqualToDictionary:obj.insertedItems];
   }
 }
 
@@ -99,7 +99,7 @@
     [_insertedSections hash],
     [_insertedItems hash]
   };
-  return CKIntegerArrayHash(hashes, CK_ARRAY_COUNT(hashes));
+  return RCIntegerArrayHash(hashes, CK_ARRAY_COUNT(hashes));
 }
 
 @end

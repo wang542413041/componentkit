@@ -14,7 +14,6 @@
 
 #import <ComponentKit/CKCollection.h>
 #import <ComponentKit/CKComponentScope.h>
-#import <ComponentKit/CKComponentScopeHandle.h>
 #import <ComponentKit/CKComponentScopeRoot.h>
 #import <ComponentKit/CKComponentScopeRootFactory.h>
 #import <ComponentKit/CKComponentProtocol.h>
@@ -41,8 +40,13 @@
 { return @""; }
 - (const char *)typeName
 { return ""; }
-+ (CKComponentCoalescingMode)coalescingMode
-{ return CKComponentCoalescingModeNone; }
++ (RCComponentCoalescingMode)coalescingMode
+{ return RCComponentCoalescingModeNone; }
+- (void)buildComponentTree:(CKTreeNode *)parent previousParent:(CKTreeNode *)previousParent params:(const CKBuildComponentTreeParams &)params parentHasStateUpdate:(BOOL)parentHasStateUpdate { }
+- (unsigned int)numberOfChildren { return 0; }
+- (id<CKComponentProtocol>)childAtIndex:(unsigned int)index { return nil; }
+- (CKTreeNode *)treeNode { return nil; }
+- (void)acquireTreeNode:(CKTreeNode *)treeNode { }
 @end
 
 @interface TestComponentWithoutScopedProtocol : NSObject <CKComponentProtocol>
@@ -57,8 +61,14 @@
 { return @""; }
 - (const char *)typeName
 { return ""; }
-+ (CKComponentCoalescingMode)coalescingMode
-{ return CKComponentCoalescingModeNone; }
++ (RCComponentCoalescingMode)coalescingMode
+{ return RCComponentCoalescingModeNone; }
+- (void)buildComponentTree:(CKTreeNode *)parent previousParent:(CKTreeNode *)previousParent params:(const CKBuildComponentTreeParams &)params parentHasStateUpdate:(BOOL)parentHasStateUpdate { }
+- (id<CKComponentProtocol>)childAtIndex:(unsigned int)index { return nil; }
+- (CKTreeNode *)treeNode { return nil; }
+- (void)acquireTreeNode:(CKTreeNode *)treeNode { }
+- (unsigned int)numberOfChildren { return 0; }
+
 @end
 
 @interface TestComponentControllerWithScopedProtocol : NSObject <CKComponentControllerProtocol, TestScopedProtocol>
@@ -100,9 +110,9 @@
 {
   CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKThreadLocalComponentScope threadScope(root, {});
-  CKScopeTreeNode *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
+  CKTreeNode *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
   CKComponentScope scope([CKCompositeComponent class]);
-  CKScopeTreeNode *currentFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
+  CKTreeNode *currentFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
   XCTAssertTrue(currentFrame != rootFrame);
 }
 
@@ -130,7 +140,7 @@
 {
   CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKThreadLocalComponentScope threadScope(root, {});
-  CKScopeTreeNode *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
+  CKTreeNode *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
   {
     CKComponentScope scope([CKCompositeComponent class], @"moose");
     XCTAssertTrue(CKThreadLocalComponentScope::currentScope()->stack.top().node != rootFrame);
@@ -256,15 +266,15 @@
 
 #pragma mark - Test Component Scope Identifier
 
-- (void)testComponentScopeIdentifierIsSameAsScopeHandleGlobalIdentifier
+- (void)testComponentScopeIdentifierIsSameAsNodeIdentifier
 {
   CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   {
     CKThreadLocalComponentScope threadScope(root1, {});
     {
       CKComponentScope scope([CKCompositeComponent class], @"macaque");
-      int32_t globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier;
-      XCTAssertEqual(globalIdentifier, scope.identifier());
+      const auto identifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.nodeIdentifier;
+      XCTAssertEqual(identifier, scope.identifier());
     }
   }
 }

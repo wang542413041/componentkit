@@ -42,7 +42,7 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
                                    .build();
   CKComponent *c = [CKDontMountChildrenComponent newWithChild:viewComponent];
 
-  CKLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
+  RCLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
 
   XCTAssertTrue(layout.children->front().layout.component == viewComponent,
                @"Expected view component to exist in the layout tree");
@@ -61,7 +61,7 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
   CKComponent *c = CK::ComponentBuilder()
                        .viewClass([UIView class])
                        .build();
-  CKLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
+  RCLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
 
   UIView *container = [UIView new];
   NSSet *mountedComponents = CKMountComponentLayout(layout, container, nil, nil);
@@ -80,7 +80,7 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
                        .viewClass([UIView class])
                        .build();
 
-  const CKLayout layoutBoth = {a, CGSizeZero,
+  const RCLayout layoutBoth = {a, CGSizeZero,
     {
       {CGPointZero, {a, {}, {}}},
       {CGPointZero, {b, {}, {}}},
@@ -93,7 +93,7 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
   XCTAssertNotNil(a.viewContext.view, @"Didn't create view");
   XCTAssertNotNil(b.viewContext.view, @"Didn't create view");
 
-  const CKLayout layoutA = {a, CGSizeZero,
+  const RCLayout layoutA = {a, CGSizeZero,
     {
       {CGPointZero, {a, {}, {}}},
     }
@@ -119,11 +119,11 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
   const auto component = [CKComponent newWithView:viewConfig size:{}];
   const auto view = [[UIView alloc] initWithFrame:CGRect {{0, 0}, {10, 10}}];
   const auto context = CK::Component::MountContext::RootContext(view, nullptr);
-  CKLayout layout(component, {5, 5});
+  RCLayout layout(component, {5, 5});
 
   std::unique_ptr<CKMountInfo> mountInfo;
 
-  const auto result = CKPerformMount(mountInfo, layout, viewConfig, context, nil, nullptr, nullptr);
+  const auto result = CKPerformMount(mountInfo, layout, viewConfig, context, nil, nullptr, nullptr, nullptr, nullptr);
   const auto label = (UILabel *)view.subviews.firstObject;
   XCTAssertTrue(result.mountChildren);
   XCTAssertTrue(CGRectEqualToRect(label.frame, CGRect {{0, 0}, {5, 5}}));
@@ -153,15 +153,15 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
 
 - (unsigned int)numberOfChildren
 {
-  return CKIterable::numberOfChildren(_child);
+  return RCIterable::numberOfChildren(_child);
 }
 
 - (id<CKMountable>)childAtIndex:(unsigned int)index
 {
-  return CKIterable::childAtIndex(self, index, _child);
+  return RCIterable::childAtIndex(self, index, _child);
 }
 
-- (CKLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   return {
     self,
@@ -171,7 +171,7 @@ CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
 }
 
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                        layout:(const CKLayout &)layout
+                                        layout:(const RCLayout &)layout
                               supercomponent:(CKComponent *)supercomponent
 {
   CK::Component::MountResult r = [super mountInContext:context layout:layout supercomponent:supercomponent];

@@ -17,37 +17,33 @@
 #import <ComponentKit/CKComponentScopeRoot.h>
 #import <ComponentKit/CKMutex.h>
 #import <ComponentKit/CKOptional.h>
-#import <ComponentKit/CKTreeNodeProtocol.h>
+#import <ComponentKit/CKTreeNode.h>
+#import <ComponentKit/CKThreadLocalComponentScope.h>
 #import <ComponentKit/CKCoalescedSpecSupport.h>
 
-#import "CKScopeTreeNode.h"
-#import "CKRenderTreeNode.h"
+#import "CKTreeNode.h"
 
 namespace CKRenderInternal {
 
   // Reuse the previous component generation and its component tree and notify the previous component about it.
   static auto reusePreviousComponent(id<CKRenderComponentProtocol> component,
-                                     __strong id<CKTreeNodeComponentProtocol> *childComponent,
-                                     CKRenderTreeNode *node,
-                                     CKRenderTreeNode *previousNode,
+                                     __strong id<CKComponentProtocol> *childComponent,
+                                     CKTreeNode *node,
+                                     CKTreeNode *previousNode,
                                      const CKBuildComponentTreeParams &params,
                                      CKRenderDidReuseComponentBlock didReuseBlock) -> void {
 
-    id<CKTreeNodeComponentProtocol> prevChildComponent;
-
     // Update the previous component.
-    prevChildComponent = [(id<CKRenderWithChildComponentProtocol>)previousNode.component child];
+    auto const previousComponent = (id<CKRenderWithChildComponentProtocol>)previousNode.component;
+
     // Update the render node of the component reuse.
-    [node didReuseRenderNode:previousNode
-                   scopeRoot:params.scopeRoot
-           previousScopeRoot:params.previousScopeRoot];
+    [node reusePreviousNode:previousNode inScopeRoot:params.scopeRoot];
 
     if (childComponent != nullptr) {
       // Link the previous child component to the the new component.
-      *childComponent = prevChildComponent;
+      *childComponent = previousComponent.child;
     }
 
-    auto const previousComponent = (id<CKRenderComponentProtocol>)previousNode.component;
     if (didReuseBlock) {
       didReuseBlock(previousComponent);
     }
@@ -60,13 +56,13 @@ namespace CKRenderInternal {
 
   // Reuse the previous component generation and its component tree and notify the previous component about it.
   static auto reusePreviousComponent(id<CKRenderComponentProtocol> component,
-                                     __strong id<CKTreeNodeComponentProtocol> *childComponent,
-                                     CKRenderTreeNode *node,
-                                     id<CKTreeNodeWithChildrenProtocol> parent,
-                                     id<CKTreeNodeWithChildrenProtocol> previousParent,
+                                     __strong id<CKComponentProtocol> *childComponent,
+                                     CKTreeNode *node,
+                                     CKTreeNode *parent,
+                                     CKTreeNode *previousParent,
                                      const CKBuildComponentTreeParams &params,
                                      CKRenderDidReuseComponentBlock didReuseBlock) -> BOOL {
-    auto const previousNode = (CKRenderTreeNode *)[previousParent childForComponentKey:node.componentKey];
+    auto const previousNode = [previousParent childForComponentKey:node.componentKey];
     if (previousNode) {
       CKRenderInternal::reusePreviousComponent(component, childComponent, node, previousNode, params, didReuseBlock);
       return YES;
@@ -76,13 +72,13 @@ namespace CKRenderInternal {
 
   // Check if shouldComponentUpdate returns `NO`; if it does, reuse the previous component generation and its component tree and notify the previous component about it.
   static auto reusePreviousComponentIfComponentsAreEqual(id<CKRenderComponentProtocol> component,
-                                                         __strong id<CKTreeNodeComponentProtocol> *childComponent,
-                                                         CKRenderTreeNode *node,
-                                                         id<CKTreeNodeWithChildrenProtocol> parent,
-                                                         id<CKTreeNodeWithChildrenProtocol> previousParent,
+                                                         __strong id<CKComponentProtocol> *childComponent,
+                                                         CKTreeNode *node,
+                                                         CKTreeNode *parent,
+                                                         CKTreeNode *previousParent,
                                                          const CKBuildComponentTreeParams &params,
                                                          CKRenderDidReuseComponentBlock didReuseBlock) -> BOOL {
-    auto const previousNode = (CKRenderTreeNode *)[previousParent childForComponentKey:node.componentKey];
+    auto const previousNode = [previousParent childForComponentKey:node.componentKey];
     auto const previousComponent = (id<CKRenderComponentProtocol>)previousNode.component;
     // If there is no previous compononet, there is nothing to reuse.
     if (previousComponent) {
@@ -102,11 +98,11 @@ namespace CKRenderInternal {
     return NO;
   }
 
-  static auto reusePreviousComponentForSingleChild(CKRenderTreeNode *node,
+  static auto reusePreviousComponentForSingleChild(CKTreeNode *node,
                                                    id<CKRenderWithChildComponentProtocol> component,
-                                                   __strong id<CKTreeNodeComponentProtocol> *childComponent,
-                                                   id<CKTreeNodeWithChildrenProtocol> parent,
-                                                   id<CKTreeNodeWithChildrenProtocol> previousParent,
+                                                   __strong id<CKComponentProtocol> *childComponent,
+                                                   CKTreeNode *parent,
+                                                   CKTreeNode *previousParent,
                                                    const CKBuildComponentTreeParams &params,
                                                    BOOL parentHasStateUpdate,
                                                    CKRenderDidReuseComponentBlock didReuseBlock) -> BOOL {
@@ -148,11 +144,9 @@ namespace CKRenderInternal {
   }
 
 
-static auto didBuildComponentTree(id<CKTreeNodeProtocol> node,
-                                  id<CKTreeNodeComponentProtocol> component,
+static auto didBuildComponentTree(CKTreeNode *node,
+                                  id<CKComponentProtocol> component,
                                   const CKBuildComponentTreeParams &params) -> void {
-
-    [CKRenderTreeNode didBuildComponentTree:node];
 
     // Context support
     CKComponentContextHelper::didBuildComponentTree(component);
@@ -169,21 +163,19 @@ static auto didBuildComponentTree(id<CKTreeNodeProtocol> node,
 namespace CKRender {
   namespace ComponentTree {
     namespace Iterable {
-    auto build(id<CKTreeNodeComponentProtocol> component,
-               id<CKTreeNodeWithChildrenProtocol> parent,
-               id<CKTreeNodeWithChildrenProtocol> _Nullable previousParent,
+    auto build(id<CKComponentProtocol> component,
+               CKTreeNode *parent,
+               CKTreeNode *_Nullable previousParent,
                const CKBuildComponentTreeParams &params,
                BOOL parentHasStateUpdate) -> void
     {
-      CKCAssertNotNil(component, @"component cannot be nil");
-      CKCAssertNotNil(parent, @"parent cannot be nil");
+      RCCAssertNotNil(component, @"component cannot be nil");
+      RCCAssertNotNil(parent, @"parent cannot be nil");
 
       // Check if the component already has a tree node.
-      id<CKTreeNodeProtocol> node = component.scopeHandle.treeNode;
+      CKTreeNode *node = component.treeNode;
 
-      if (node) {
-        [node linkComponent:component toParent:parent previousParent:previousParent params:params];
-      }
+      [node linkComponent:component toParent:parent inScopeRoot:params.scopeRoot];
 
       unsigned int numberOfChildren = [component numberOfChildren];
       if (numberOfChildren == 0) {
@@ -202,15 +194,15 @@ namespace CKRender {
       // TODO: Share this value with the value precomputed in the scope
       parentHasStateUpdate = parentHasStateUpdate ||
       (params.buildTrigger == CKBuildTriggerStateUpdate &&
-       CKRender::componentHasStateUpdate(component.scopeHandle,
+       CKRender::componentHasStateUpdate(node,
                                          previousParentOrComponent,
                                          params.buildTrigger,
                                          params.stateUpdates));
 
       // If there is a node, we update the parents' pointers to the next level in the tree.
       if (node) {
-        parent = (id<CKTreeNodeWithChildrenProtocol>)node;
-        previousParent = (id<CKTreeNodeWithChildrenProtocol>)[previousParent childForComponentKey:[node componentKey]];
+        parent = node;
+        previousParent = [previousParent childForComponentKey:[node componentKey]];
 
         // Report information to `debugAnalyticsListener`.
         if (numberOfChildren == 1 && params.shouldCollectTreeNodeCreationInformation) {
@@ -223,7 +215,7 @@ namespace CKRender {
       }
 
       for (int i=0; i<numberOfChildren; i++) {
-        auto const childComponent = (id<CKTreeNodeComponentProtocol>)[component childAtIndex:i];
+        auto const childComponent = (id<CKComponentProtocol>)[component childAtIndex:i];
         if (childComponent) {
           [childComponent buildComponentTree:parent
                               previousParent:previousParent
@@ -235,26 +227,55 @@ namespace CKRender {
   }
 
     namespace Render {
+
+      struct ThreadLocalStorageSupport {
+        ThreadLocalStorageSupport(const CKComponentScopePair& pair) : _pair(pair), _threadLocalScope(CKThreadLocalComponentScope::currentScope()) {
+          if (auto const threadLocalScope = _threadLocalScope) {
+            // Push the new pair into the thread local.
+            threadLocalScope->push(_pair);
+          } else {
+            RCCFailAssert(@"No TLS while building a render component!?");
+          }
+        }
+        ~ThreadLocalStorageSupport() {
+          if (auto const threadLocalScope = _threadLocalScope) {
+            RCCAssert(!threadLocalScope->stack.empty() && threadLocalScope->stack.top().node == _pair.node, @"top.node (%@) is not equal to node (%@)", threadLocalScope->stack.top().node, _pair.node);
+
+            // Pop the top element of the stack.
+            threadLocalScope->pop();
+          }
+        }
+
+        ThreadLocalStorageSupport(const ThreadLocalStorageSupport&) = delete;
+
+       private:
+        const CKComponentScopePair& _pair;
+        CKThreadLocalComponentScope *_threadLocalScope;
+      };
+
       auto build(id<CKRenderWithChildComponentProtocol> component,
-                 __strong id<CKTreeNodeComponentProtocol> *childComponent,
-                 id<CKTreeNodeWithChildrenProtocol> parent,
-                 id<CKTreeNodeWithChildrenProtocol> _Nullable previousParent,
+                 __strong id<CKComponentProtocol> *childComponent,
+                 CKTreeNode *parent,
+                 CKTreeNode *_Nullable previousParent,
                  const CKBuildComponentTreeParams &params,
                  BOOL parentHasStateUpdate,
-                 CKRenderDidReuseComponentBlock didReuseBlock) -> id<CKTreeNodeProtocol>
+                 CKRenderDidReuseComponentBlock didReuseBlock) -> CKTreeNode *
       {
-        CKCAssertNotNil(component, @"component cannot be nil");
-        CKCAssertNotNil(parent, @"parent cannot be nil");
+        RCCAssertNotNil(component, @"component cannot be nil");
+        RCCAssertNotNil(parent, @"parent cannot be nil");
 
         // Context support
         CKComponentContextHelper::willBuildComponentTree(component);
 
-        auto const node = [[CKRenderTreeNode alloc]
-                           initWithComponent:component
-                           parent:parent
-                           previousParent:previousParent
-                           scopeRoot:params.scopeRoot
-                           stateUpdates:params.stateUpdates];
+        const auto pair = [CKTreeNode childPairForComponent:component
+                                                     parent:parent
+                                             previousParent:previousParent
+                                                  scopeRoot:params.scopeRoot
+                                               stateUpdates:params.stateUpdates];
+
+        ThreadLocalStorageSupport tlsSupport(pair);
+
+        auto const node = pair.node;
 
         // Faster Props updates and context support
         params.scopeRoot.rootNode.willBuildComponentTree(node);
@@ -271,7 +292,7 @@ namespace CKRender {
         // Update the `parentHasStateUpdate` param for Faster state/props updates.
         parentHasStateUpdate = parentHasStateUpdate ||
         (params.buildTrigger == CKBuildTriggerStateUpdate &&
-         CKRender::componentHasStateUpdate(node.scopeHandle,
+         CKRender::componentHasStateUpdate(node,
                                            previousParent,
                                            params.buildTrigger,
                                            params.stateUpdates));
@@ -286,7 +307,7 @@ namespace CKRender {
           }
           // Call build component tree on the child component.
           [child buildComponentTree:node
-                     previousParent:(id<CKTreeNodeWithChildrenProtocol>)[previousParent childForComponentKey:[node componentKey]]
+                     previousParent:[previousParent childForComponentKey:[node componentKey]]
                              params:params
                parentHasStateUpdate:parentHasStateUpdate];
         }
@@ -299,7 +320,7 @@ namespace CKRender {
     }
 
     namespace Root {
-      auto build(id<CKTreeNodeComponentProtocol> component, const CKBuildComponentTreeParams &params) -> void {
+      auto build(id<CKComponentProtocol> component, const CKBuildComponentTreeParams &params) -> void {
         auto const rootNode = params.scopeRoot.rootNode.node();
 
         if (component) {
@@ -316,7 +337,7 @@ namespace CKRender {
   namespace ScopeHandle {
     namespace Render {
       auto create(id<CKRenderComponentProtocol> component,
-                  id<CKTreeNodeProtocol> previousNode,
+                  CKTreeNode *previousNode,
                   CKComponentScopeRoot *scopeRoot,
                   const CKComponentStateUpdateMap &stateUpdates) -> CKComponentScopeHandle*
       {
@@ -340,10 +361,11 @@ namespace CKRender {
     }
   }
 
-  auto componentHasStateUpdate(__unsafe_unretained CKComponentScopeHandle *scopeHandle,
+  auto componentHasStateUpdate(__unsafe_unretained CKTreeNode *node,
                                __unsafe_unretained id previousParent,
                                CKBuildTrigger buildTrigger,
                                const CKComponentStateUpdateMap& stateUpdates) -> BOOL {
+    const auto scopeHandle = node.scopeHandle;
     if (scopeHandle != nil && previousParent != nil && buildTrigger == CKBuildTriggerStateUpdate) {
       return stateUpdates.find(scopeHandle) != stateUpdates.end();
     }
@@ -362,7 +384,7 @@ namespace CKRender {
         break;
       }
       auto const parentNode = previousRootNode.parentForNodeIdentifier(currentNodeIdentifier);
-      CKCAssert((parentNode || nodeIdentifier == currentNodeIdentifier),
+      RCCAssert((parentNode || nodeIdentifier == currentNodeIdentifier),
                 @"The next parent cannot be nil unless it's a root component.");
       currentNodeIdentifier = parentNode.nodeIdentifier;
     }

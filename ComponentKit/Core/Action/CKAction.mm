@@ -15,9 +15,10 @@
 #import <array>
 
 #import <ComponentKit/CKInternalHelpers.h>
-#import <ComponentKit/CKAssert.h>
-#import <ComponentKit/CKAssociatedObject.h>
+#import <RenderCore/RCAssert.h>
+#import <ComponentKit/RCAssociatedObject.h>
 #import <ComponentKit/CKCollection.h>
+#import <ComponentKit/CKGlobalConfig.h>
 #import <ComponentKit/CKMutex.h>
 
 #import "CKComponent+UIView.h"
@@ -32,12 +33,14 @@ void CKConfigureInvocationWithArguments(NSInvocation *invocation, NSInteger inde
 bool CKActionBase::operator==(const CKActionBase& rhs) const
 {
   return (_variant == rhs._variant
-          && CKObjectIsEqual(_target, rhs._target)
+          && RCObjectIsEqual(_target, rhs._target)
           // If we are using a scoped action, we are only concerned that the selector and the
           // responder unique identifier matches.
-          && _scopedResponderAndKey.responder.uniqueIdentifier == rhs._scopedResponderAndKey.responder.uniqueIdentifier
-          && _selector == rhs._selector
-          && _block == rhs._block);
+          && _scopedResponderAndKey.responder == rhs._scopedResponderAndKey.responder
+          && _selectorOrIdentifier == rhs._selectorOrIdentifier
+          && ((CKReadGlobalConfig().actionShouldCompareCustomIdentifier
+               && _variant == CKActionVariant::BlockWithIdentifier)
+              || _block == rhs._block));
 }
 
 CKActionSendBehavior CKActionBase::defaultBehavior() const
@@ -57,7 +60,10 @@ id CKActionBase::initialTarget(CKComponent *sender) const
     case CKActionVariant::Responder:
       return [_scopedResponderAndKey.responder responderForKey:_scopedResponderAndKey.key];
     case CKActionVariant::Block:
-      CKCFailAssert(@"Should not be asking for target for block action.");
+      RCCFailAssert(@"Should not be asking for target for block action.");
+      return nil;
+    case CKActionVariant::BlockWithIdentifier:
+      RCCFailAssert(@"Should not be asking for target for block action.");
       return nil;
   }
 }
@@ -67,7 +73,7 @@ CKActionBase::CKActionBase() noexcept
     _scopedResponderAndKey({}),
     _block(NULL),
     _variant(CKActionVariant::RawSelector),
-    _selector(nullptr) {}
+    _selectorOrIdentifier(nullptr) {}
 
 CKActionBase::CKActionBase(const CKActionBase&) = default;
 
@@ -76,20 +82,20 @@ CKActionBase::CKActionBase(id target, SEL selector) noexcept
     _scopedResponderAndKey({}),
     _block(NULL),
     _variant(CKActionVariant::TargetSelector),
-    _selector(selector) {}
+    _selectorOrIdentifier(selector) {}
 
 CKActionBase::CKActionBase(const CKComponentScope &scope, SEL selector) noexcept
-  : CKActionBase(selector, scope.scopeHandle()) { }
+  : CKActionBase(selector, scope.node()) { }
 
-CKActionBase::CKActionBase(SEL selector, CKComponentScopeHandle *handle) noexcept
+CKActionBase::CKActionBase(SEL selector, CKTreeNode *node) noexcept
   : _target(nil),
-    _scopedResponderAndKey{ .responder = handle.scopedResponder, .key = [handle.scopedResponder keyForHandle:handle] },
+    _scopedResponderAndKey{ .responder = node.scopeHandle.scopedResponder, .key = [node.scopeHandle.scopedResponder keyForHandle:node.scopeHandle] },
     _block(NULL),
 
     _variant(CKActionVariant::Responder),
-    _selector(selector)
+    _selectorOrIdentifier(selector)
 {
-  CKCAssertNotNil(handle, @"You are creating an action that will not fire because you have an invalid scope handle.");
+  RCCAssertNotNil(node.scopeHandle, @"You are creating an action that will not fire because you have an invalid scope handle.");
 }
 
 CKActionBase::CKActionBase(SEL selector) noexcept
@@ -97,36 +103,54 @@ CKActionBase::CKActionBase(SEL selector) noexcept
     _scopedResponderAndKey({}),
     _block(NULL),
     _variant(CKActionVariant::RawSelector),
-    _selector(selector) {}
+    _selectorOrIdentifier(selector) {}
 
 CKActionBase::CKActionBase(dispatch_block_t block) noexcept
   : _target(nil),
     _scopedResponderAndKey({}),
     _block(block),
     _variant(CKActionVariant::Block),
-    _selector(NULL) {}
+    _selectorOrIdentifier(NULL) {}
+
+CKActionBase::CKActionBase(dispatch_block_t block, void *functionPointer, CKScopedResponder *responder, CKScopedResponderKey key) noexcept
+  : _target(nil),
+    _scopedResponderAndKey(CKActionBase::ScopedResponderAndKey{responder, key}),
+    _block(block),
+    _variant(CKActionVariant::BlockWithIdentifier),
+    _selectorOrIdentifier(functionPointer) {};
 
 CKActionBase::operator bool() const noexcept {
-  return _selector != NULL || _block != NULL || _scopedResponderAndKey.responder != nil;
+  return _block != NULL || _selectorOrIdentifier != NULL ||  _scopedResponderAndKey.responder != nil;
 }
 
 CKActionBase::~CKActionBase() {}
 
 SEL CKActionBase::selector() const noexcept {
-  return _selector;
+  if (_variant == CKActionVariant::BlockWithIdentifier || _variant == CKActionVariant::Block) {
+    return nil;
+  }
+  return (SEL)_selectorOrIdentifier;
 }
 
 std::string CKActionBase::identifier() const noexcept
 {
   switch (_variant) {
     case CKActionVariant::RawSelector:
-      return std::string(sel_getName(_selector)) + "-Selector";
+      return std::string(sel_getName((SEL)_selectorOrIdentifier)) + "-Selector";
     case CKActionVariant::TargetSelector:
-      return std::string(sel_getName(_selector)) + "-TargetSelector-" + std::to_string((long)_target);
+      return std::string(sel_getName((SEL)_selectorOrIdentifier)) + "-TargetSelector-" + std::to_string((long)_target);
     case CKActionVariant::Responder:
-      return std::string(sel_getName(_selector)) + "-Responder-" + std::to_string(_scopedResponderAndKey.responder.uniqueIdentifier);
+      return std::string(sel_getName((SEL)_selectorOrIdentifier)) + "-Responder-" + std::to_string((long)_scopedResponderAndKey.responder);
     case CKActionVariant::Block:
-      return std::string(sel_getName(_selector)) + "-Block-" + std::to_string((long)_block);
+      return "Block-" + std::to_string((long)_block);
+    case CKActionVariant::BlockWithIdentifier:
+      if (CKReadGlobalConfig().actionShouldUseCustomIdentifierInIdentifierString) {
+        return std::string("BlockWithIdentifier-") + std::to_string((long)_scopedResponderAndKey.responder) +
+            "-" + std::to_string((long)_selectorOrIdentifier);
+      } else {
+        return std::string("BlockWithIdentifier-") + std::to_string((long)_scopedResponderAndKey.responder) +
+            "-" + std::to_string((long)_block);
+      }
   }
 }
 
@@ -134,16 +158,15 @@ dispatch_block_t CKActionBase::block() const noexcept {
   return _block;
 }
 
-CKComponentScopeHandle *CKActionBase::scopeHandleFromContext(const CK::BaseSpecContext &context) {
+CKTreeNode *CKActionBase::nodeFromContext(const CK::BaseSpecContext &context) noexcept {
   // Requires CKComponentInternal.h which shouldn't be imported publicly.
-  return componentFromContext(context).scopeHandle;
+  return componentFromContext(context).treeNode;
 }
 
-CKComponent *CKActionBase::componentFromContext(const CK::BaseSpecContext &context) {
+CKComponent *CKActionBase::componentFromContext(const CK::BaseSpecContext &context) noexcept {
   const auto component = context._component;
 #if DEBUG
-    CKCAssertNotNil(component, @"BaseSpecContext contains nil component");
-    CKCAssert([component conformsToProtocol:@protocol(CKTreeNodeComponentProtocol)], @"RenderContext contains non tree node component");
+    RCCAssertNotNil(component, @"BaseSpecContext contains nil component");
 #endif
   return ((CKComponent *)component);
 }
@@ -160,7 +183,7 @@ CKActionInfo CKActionFind(SEL selector, id target) noexcept
   id responder = ([target respondsToSelector:@selector(targetForAction:withSender:)]
                   ? [target targetForAction:selector withSender:target]
                   : target);
-  CKCAssert(![responder isProxy],
+  RCCAssert(![responder isProxy],
             @"NSProxy can't be a responder for target-selector CKAction. Please use a block action instead.");
   IMP imp = [responder methodForSelector:selector];
   while (!imp) {
@@ -176,7 +199,7 @@ CKActionInfo CKActionFind(SEL selector, id target) noexcept
     id forwardingTarget = [responder forwardingTargetForSelector:selector];
     if (!forwardingTarget || forwardingTarget == responder) {
       // Bail, the object they're asking us to message will just crash if the method is invoked on them
-      CKCFailAssertWithCategory(NSStringFromSelector(selector),
+      RCCFailAssertWithCategory(NSStringFromSelector(selector),
                                 @"Forwarding target failed for action: %@ %@",
                                 NSStringFromSelector(selector),
                                 target);
@@ -184,12 +207,12 @@ CKActionInfo CKActionFind(SEL selector, id target) noexcept
     }
 
     responder = forwardingTarget;
-    CKCAssert(![responder isProxy],
+    RCCAssert(![responder isProxy],
               @"NSProxy can't be a responder for target-selector CKAction. Please use a block action instead.");
     imp = [responder methodForSelector:selector];
   }
 
-  CKCAssert(imp != nil,
+  RCCAssert(imp != nil,
             @"IMP not found for selector => SEL: %@ | target: %@",
             NSStringFromSelector(selector), [target class]);
 
@@ -255,10 +278,10 @@ CKComponentViewAttributeValue CKComponentActionAttribute(const CKAction<UIEvent 
     {
       std::string("CKComponentActionAttribute-") + action.identifier() + "-" + std::to_string(controlEvents),
       ^(UIControl *control, id value){
-        CKComponentActionList *list = CKGetAssociatedObject_MainThreadAffined(control, ck_actionListKey);
+        CKComponentActionList *list = RCGetAssociatedObject_MainThreadAffined(control, ck_actionListKey);
         if (list == nil) {
           list = [CKComponentActionList new];
-          CKSetAssociatedObject_MainThreadAffined(control, ck_actionListKey, list);
+          RCSetAssociatedObject_MainThreadAffined(control, ck_actionListKey, list);
         }
         if (list->_registeredForwarders.insert(controlEvents).second) {
           // Since this is the first time we've seen this {control, events} pair, add a Forwarder as a target.
@@ -274,12 +297,12 @@ CKComponentViewAttributeValue CKComponentActionAttribute(const CKAction<UIEvent 
         list->_actions[controlEvents].push_back(action);
       },
       ^(UIControl *control, id value){
-        CKComponentActionList *const list = CKGetAssociatedObject_MainThreadAffined(control, ck_actionListKey);
-        CKCAssertNotNil(list, @"Unapplicator should always find an action list installed by applicator");
+        CKComponentActionList *const list = RCGetAssociatedObject_MainThreadAffined(control, ck_actionListKey);
+        RCCAssertNotNil(list, @"Unapplicator should always find an action list installed by applicator");
         auto &actionList = list->_actions[controlEvents];
         auto it = CK::find(actionList, action);
         if (it == actionList.end()) {
-          CKCFailAssert(@"Unapplicator should always find item in action list");
+          RCCFailAssert(@"Unapplicator should always find item in action list");
           return;
         }
         actionList.erase(it);
@@ -306,8 +329,8 @@ CKComponentViewAttributeValue CKComponentActionAttribute(const CKAction<UIEvent 
 
 - (void)handleControlEventFromSender:(UIControl *)sender withEvent:(UIEvent *)event
 {
-  CKComponentActionList *const list = CKGetAssociatedObject_MainThreadAffined(sender, ck_actionListKey);
-  CKCAssertNotNil(list, @"Forwarder should always find an action list installed by applicator");
+  CKComponentActionList *const list = RCGetAssociatedObject_MainThreadAffined(sender, ck_actionListKey);
+  RCCAssertNotNil(list, @"Forwarder should always find an action list installed by applicator");
   // Protect against mutation-during-enumeration by copying the list of actions to send:
   const std::vector<CKAction<UIEvent *>> copiedActions = list->_actions[_controlEvents];
   CKComponent *const sendingComponent = CKMountedComponentForView(sender);
@@ -324,7 +347,7 @@ CKComponentViewAttributeValue CKComponentActionAttribute(const CKAction<UIEvent 
 std::unordered_map<UIControlEvents, std::vector<CKAction<UIEvent *>>> _CKComponentDebugControlActionsForComponent(CKComponent *const component)
 {
 #if DEBUG
-  CKComponentActionList *const list = CKGetAssociatedObject_MainThreadAffined(component.viewContext.view, ck_actionListKey);
+  CKComponentActionList *const list = RCGetAssociatedObject_MainThreadAffined(component.viewContext.view, ck_actionListKey);
   if (list == nil) {
     return {};
   }
@@ -341,7 +364,7 @@ BOOL checkMethodSignatureAgainstTypeEncodings(SEL selector, Method method, const
   }
 
   if (typeEncodings.size() + 3 < method_getNumberOfArguments(method)) {
-    CKCFailAssert(@"Expected action method %@ to take less than %llu arguments, but it supports %llu", NSStringFromSelector(selector), (unsigned long long)typeEncodings.size(), (unsigned long long)method_getNumberOfArguments(method) - 3);
+    RCCFailAssert(@"Expected action method %@ to take less than %llu arguments, but it supports %llu", NSStringFromSelector(selector), (unsigned long long)typeEncodings.size(), (unsigned long long)method_getNumberOfArguments(method) - 3);
     return NO;
   }
 
@@ -353,7 +376,7 @@ BOOL checkMethodSignatureAgainstTypeEncodings(SEL selector, Method method, const
   free(return_type);
 
   if (has_return_type) {
-    CKCFailAssert(@"Component action methods should not have any return value. Any objects returned from this method will be leaked.");
+    RCCFailAssert(@"Component action methods should not have any return value. Any objects returned from this method will be leaked.");
     return NO;
   }
 
@@ -397,7 +420,7 @@ BOOL checkMethodSignatureAgainstTypeEncodings(SEL selector, Method method, const
     free(cp_argType);
 
     if (!doEncodingsMatch) {
-      CKCFailAssert(@"Implementation of %@ does not match expected types.\nExpected type %s, got %@", NSStringFromSelector(selector), typeEncoding, safe_methodEncoding);
+      RCCFailAssert(@"Implementation of %@ does not match expected types.\nExpected type %s, got %@", NSStringFromSelector(selector), typeEncoding, safe_methodEncoding);
       return NO;
     }
 
@@ -410,7 +433,7 @@ BOOL checkMethodSignatureAgainstTypeEncodings(SEL selector, Method method, const
     free(unasfe_methodEncoding);
 
     if (methodEncoding != nil && [methodEncoding isEqualToString:@"@"] == NO) {
-      CKCFailAssert(@"Sender of %@ is not an object.\nGot %@ instead. Please add the component as the first argument when sending an action", NSStringFromSelector(selector), methodEncoding);
+      RCCFailAssert(@"Sender of %@ is not an object.\nGot %@ instead. Please add the component as the first argument when sending an action", NSStringFromSelector(selector), methodEncoding);
       return NO;
     }
   }
@@ -421,11 +444,12 @@ BOOL checkMethodSignatureAgainstTypeEncodings(SEL selector, Method method, const
 #if DEBUG
 void _CKTypedComponentDebugCheckComponentScope(const CKComponentScope &scope, SEL selector, const std::vector<const char *> &typeEncodings) noexcept
 {
-  _CKTypedComponentDebugCheckComponentScopeHandle(scope.scopeHandle(), selector, typeEncodings);
+  _CKTypedComponentDebugCheckComponentNode(scope.node(), selector, typeEncodings);
 }
 
-void _CKTypedComponentDebugCheckComponentScopeHandle(CKComponentScopeHandle *handle, SEL selector, const std::vector<const char *> &typeEncodings) noexcept
+void _CKTypedComponentDebugCheckComponentNode(CKTreeNode *node, SEL selector, const std::vector<const char *> &typeEncodings) noexcept
 {
+  const auto handle = node.scopeHandle;
   if (handle == nil) {
     return;
   }
@@ -435,7 +459,7 @@ void _CKTypedComponentDebugCheckComponentScopeHandle(CKComponentScopeHandle *han
   // argument indices.
   const Class klass = objc_getClass(handle.componentTypeName);
 
-  CKCAssertWithCategory(klass != nil,
+  RCCAssertWithCategory(klass != nil || [handle.acquiredComponent.class coalescingMode] != RCComponentCoalescingModeNone,
                         [NSString stringWithUTF8String:handle.componentTypeName],
                         @"Creating an action from a scope should always yield a class");
 
@@ -459,7 +483,7 @@ void _CKTypedComponentDebugCheckTargetSelector(id target, SEL selector, const st
     return;
   }
 
-  CKCAssert([target respondsToSelector:selector], @"Target does not respond to selector for component action. -[%@ %@]", [target class], NSStringFromSelector(selector));
+  RCCAssert([target respondsToSelector:selector], @"Target does not respond to selector for component action. -[%@ %@]", [target class], NSStringFromSelector(selector));
 
   Method method = class_getInstanceMethod([target class], selector);
   checkMethodSignatureAgainstTypeEncodings(selector, method, typeEncodings);
@@ -473,7 +497,7 @@ void _CKTypedComponentDebugCheckComponent(Class<CKComponentProtocol> klass, SEL 
   if (selector == NULL) {
     return;
   }
-  CKCAssert([componentKlass instancesRespondToSelector:selector] || [controllerKlass instancesRespondToSelector:selector], @"Target does not respond to selector for component action. -[%@ %@]", componentKlass, NSStringFromSelector(selector));
+  RCCAssert([componentKlass instancesRespondToSelector:selector] || [controllerKlass instancesRespondToSelector:selector], @"Target does not respond to selector for component action. -[%@ %@]", componentKlass, NSStringFromSelector(selector));
 
   // Type encoding with NSMethodSignatue isn't working well for C++, so we use class_getInstanceMethod()
   Method method = class_getInstanceMethod(componentKlass, selector) ?: class_getInstanceMethod(controllerKlass, selector);
